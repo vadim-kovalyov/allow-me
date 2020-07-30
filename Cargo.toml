@@ -1,0 +1,10 @@
+[package]
+name = "allow-me-rs"
+description = "Simple json-based authorization policy engine."
+version = "0.1.0"
+authors = ["Vadim Kovalyov <vadim.kovalyov@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+thiserror = "1.0"
+serde_json = "1.0"
