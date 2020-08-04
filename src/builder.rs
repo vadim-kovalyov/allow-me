@@ -1,23 +1,28 @@
-use crate::{policy::Decision, Policy, PolicyValidator, ResourceMatcher, Result};
+use serde::Deserialize;
 
-pub struct PolicyBuilder<V, M> {
+use crate::{Decision, Error, Policy, PolicyValidator, ResourceMatcher, Result, Substituter};
+
+pub struct PolicyBuilder<V, M, S> {
     validator: Option<V>,
     matcher: Option<M>,
+    substituter: Option<S>,
     json: String,
-    decision: Decision,
+    default_decision: Decision,
 }
 
-impl<V, M> PolicyBuilder<V, M>
+impl<V, M, S> PolicyBuilder<V, M, S>
 where
     V: PolicyValidator,
     M: ResourceMatcher,
+    S: Substituter,
 {
-    pub fn from_json(mut self, json: &str) -> Self {
+    pub fn from_json(json: &str) -> Self {
         Self {
             json: json.into(),
             validator: None,
             matcher: None,
-            decision: Decision::Denied,
+            substituter: None,
+            default_decision: Decision::Denied,
         }
     }
 
@@ -31,12 +36,39 @@ where
         self
     }
 
-    pub fn with_default_decision(mut self, decision: Decision) -> Self {
-        self.decision = decision;
+    pub fn with_substituter(mut self, substituter: S) -> Self {
+        self.substituter = Some(substituter);
         self
     }
 
-    pub fn build(mut self) -> Result<Policy<M>> {
+    pub fn with_default_decision(mut self, decision: Decision) -> Self {
+        self.default_decision = decision;
+        self
+    }
+
+    pub fn build(self) -> Result<Policy<M, S>> {
+        let definition: PolicyDefinitionV1 =
+            serde_json::from_str(&self.json).map_err(|e| Error::Deserializing(e))?;
+
         todo!()
     }
+}
+
+#[derive(Deserialize)]
+struct PolicyVersion {
+    version: String,
+}
+
+#[derive(Deserialize)]
+struct PolicyDefinitionV1 {
+    version: String,
+    allow: Vec<StatementV1>,
+    deny: Vec<StatementV1>,
+}
+
+#[derive(Deserialize)]
+struct StatementV1 {
+    identity: Vec<String>,
+    operation: Vec<String>,
+    resource: Vec<String>,
 }

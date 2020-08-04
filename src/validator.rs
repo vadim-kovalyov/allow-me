@@ -11,10 +11,11 @@ pub enum Field {
     Description,
 }
 
-struct DefaultValidator;
+#[derive(Debug)]
+pub struct DefaultValidator;
 
 impl PolicyValidator for DefaultValidator {
-    fn validate(field: Field, value: &str) -> Result<(), Error> {
+    fn validate(_field: Field, _value: &str) -> Result<(), Error> {
         Ok(())
     }
 }

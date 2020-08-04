@@ -1,14 +1,14 @@
-use crate::{policy::Request, Resource};
+use crate::policy::Request;
 
 pub trait ResourceMatcher {
-    fn do_match(&self, context: &Request, input: &Resource, policy: &Resource) -> bool;
+    fn do_match(&self, context: &Request, input: &str, policy: &str) -> bool;
 }
 
 #[derive(Debug)]
-pub struct DefaultMatcher;
+pub struct DefaultResourceMatcher;
 
-impl ResourceMatcher for DefaultMatcher {
-    fn do_match(&self, context: &Request, input: &Resource, policy: &Resource) -> bool {
+impl ResourceMatcher for DefaultResourceMatcher {
+    fn do_match(&self, _context: &Request, input: &str, policy: &str) -> bool {
         input == policy
     }
 }
