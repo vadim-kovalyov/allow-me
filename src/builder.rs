@@ -1,6 +1,9 @@
 use serde::Deserialize;
 
-use crate::{Decision, Error, Policy, PolicyValidator, ResourceMatcher, Result, Substituter};
+use crate::{
+    policy::{Effect as CoreEffect, EffectOrd, Identities, Operations, Resources},
+    Decision, Error, Policy, PolicyValidator, ResourceMatcher, Result, Substituter,
+};
 
 pub struct PolicyBuilder<V, M, S> {
     validator: Option<V>,
@@ -47,28 +50,215 @@ where
     }
 
     pub fn build(self) -> Result<Policy<M, S>> {
-        let definition: PolicyDefinitionV1 =
-            serde_json::from_str(&self.json).map_err(|e| Error::Deserializing(e))?;
+        let mut definition: PolicyDefinition20201030 =
+            serde_json::from_str(&self.json).map_err(Error::Deserializing)?;
 
-        todo!()
+        for (order, mut statement) in definition.statements.iter_mut().enumerate() {
+            statement.order = order;
+        }
+
+        let mut static_rules = Identities::new();
+        let mut variable_rules = Identities::new();
+
+        for statement in definition.statements {
+            process_statement(&statement, &mut static_rules, &mut variable_rules);
+        }
+
+        Ok(Policy::new(
+            self.default_decision,
+            self.matcher.unwrap(),
+            self.substituter.unwrap(),
+            static_rules.0,
+            variable_rules.0,
+        ))
     }
 }
 
+fn process_statement(
+    statement: &Statement20201030,
+    static_rules: &mut Identities,
+    variable_rules: &mut Identities,
+) {
+    let (i, isub) = process_identities(statement);
+
+    println!("i: {:?}", i);
+    println!("isub: {:?}", isub);
+    static_rules.merge(i);
+    variable_rules.merge(isub);
+}
+
+fn process_identities(statement: &Statement20201030) -> (Identities, Identities) {
+    let mut static_ids = Identities::new();
+    let mut variable_ids = Identities::new();
+    for identity in &statement.identities {
+        let (static_ops, variable_ops) = process_operations(&statement);
+        println!("operations: {:?}", static_ops);
+        println!("op_substitutions: {:?}", variable_ops);
+        if is_variable_rule(identity) {
+            // if current identity has substitutions,
+            // then the whole operation subtree need
+            // to be cloned into substitutions tree.
+            let mut all = static_ops.clone();
+            all.merge(variable_ops);
+            variable_ids.insert(identity, all);
+        } else {
+            // else, divide operations and operation substitutions
+            // between identities and identity substitutions.
+            static_ids.insert(identity, static_ops);
+            variable_ids.insert(identity, variable_ops);
+        }
+    }
+
+    (static_ids, variable_ids)
+}
+
+fn process_operations(statement: &Statement20201030) -> (Operations, Operations) {
+    let mut static_ops = Operations::new();
+    let mut variable_ops = Operations::new();
+    for operation in &statement.operations {
+        let (static_res, variable_res) = process_resources(&statement);
+        println!("res: {:?}", static_res);
+        println!("res_sub: {:?}", variable_res);
+        if is_variable_rule(operation) {
+            // if current operation has variables,
+            // then the whole resource subtree need
+            // to be cloned into variables tree.
+            let mut all = static_res.clone();
+            all.merge(variable_res);
+            variable_ops.insert(operation, all);
+        } else {
+            // else, divide static resources and variable resources
+            // between static operations and variable operation.
+            static_ops.insert(operation, static_res);
+            variable_ops.insert(operation, variable_res);
+        }
+    }
+
+    (static_ops, variable_ops)
+}
+
+fn process_resources(statement: &Statement20201030) -> (Resources, Resources) {
+    let mut static_res = Resources::new();
+    let mut variable_res = Resources::new();
+    for resource in &statement.resources {
+        // split resources into two static or variable rules:
+        let map = if is_variable_rule(resource) {
+            &mut variable_res
+        } else {
+            &mut static_res
+        };
+
+        map.insert(resource.to_string(), statement.into());
+    }
+
+    (static_res, variable_res)
+}
+
+fn is_variable_rule(value: &str) -> bool {
+    value.contains("{{") //TODO: change to regex
+}
+
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct PolicyVersion {
-    version: String,
+    schema_version: String,
 }
 
 #[derive(Deserialize)]
-struct PolicyDefinitionV1 {
-    version: String,
-    allow: Vec<StatementV1>,
-    deny: Vec<StatementV1>,
+#[serde(rename_all = "camelCase")]
+struct PolicyDefinition20201030 {
+    schema_version: String,
+    statements: Vec<Statement20201030>,
 }
 
 #[derive(Deserialize)]
-struct StatementV1 {
-    identity: Vec<String>,
-    operation: Vec<String>,
-    resource: Vec<String>,
+#[serde(rename_all = "camelCase")]
+struct Statement20201030 {
+    #[serde(default)]
+    order: usize,
+    #[serde(default)]
+    description: String,
+    effect: Effect20201030,
+    identities: Vec<String>,
+    operations: Vec<String>,
+    #[serde(default)]
+    resources: Vec<String>,
+}
+
+#[derive(Deserialize, Copy, Clone)]
+#[serde(rename_all = "camelCase")]
+enum Effect20201030 {
+    Allow,
+    Deny,
+}
+
+impl Into<EffectOrd> for &Statement20201030 {
+    fn into(self) -> EffectOrd {
+        match self.effect {
+            Effect20201030::Allow => EffectOrd::new(CoreEffect::Allow, self.order),
+            Effect20201030::Deny => EffectOrd::new(CoreEffect::Deny, self.order),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{DefaultResourceMatcher, DefaultSubstituter, DefaultValidator};
+
+    #[test]
+    fn test_basic_definition() {
+        let json = r#"{
+            "schemaVersion": "2020-10-30",
+            "statements": [
+                {
+                    "effect": "deny",
+                    "identities": [
+                        "contoso.azure-devices.net/rogue_one"
+                    ],
+                    "operations": [
+                        "mqtt:publish"
+                    ],
+                    "resources": [
+                        "events/#"
+                    ]
+                },
+                {
+                    "description": "Allow all iot identities to subscribe",
+                    "effect": "allow",
+                    "identities": [
+                        "{{iot:identity}}"
+                    ],
+                    "operations": [
+                        "mqtt:subscribe"
+                    ],
+                    "resources": [
+                        "events/#"
+                    ]
+                },
+                {
+                    "effect": "allow",
+                    "identities": [
+                        "contoso.azure-devices.net/sensor_a"
+                    ],
+                    "operations": [
+                        "mqtt:publish"
+                    ],
+                    "resources": [
+                        "events/alerts"
+                    ]
+                }
+            ]
+        }"#;
+
+        let policy = PolicyBuilder::from_json(json)
+            .with_validator(DefaultValidator)
+            .with_matcher(DefaultResourceMatcher)
+            .with_substituter(DefaultSubstituter)
+            .with_default_decision(Decision::Denied)
+            .build()
+            .unwrap();
+
+        println!("!!!!!!!! {:?}", policy);
+    }
 }
