@@ -12,16 +12,15 @@
 
     dead_code //TODO: remove this
 )]
-mod builder;
 mod errors;
 mod matcher;
 mod policy;
 mod substituter;
 mod validator;
 
-pub use builder::PolicyBuilder;
 pub use errors::{Error, Result};
 pub use matcher::{DefaultResourceMatcher, ResourceMatcher};
+pub use policy::PolicyBuilder;
 pub use policy::{Decision, Policy, Request};
 pub use substituter::{DefaultSubstituter, Substituter};
 pub use validator::{DefaultValidator, PolicyValidator};

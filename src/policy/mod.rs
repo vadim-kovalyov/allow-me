@@ -1,3 +1,6 @@
+mod builder;
+pub use builder::PolicyBuilder;
+
 use std::collections::{btree_map::Entry, BTreeMap};
 
 use crate::errors::Result;
@@ -17,22 +20,6 @@ where
     R: ResourceMatcher,
     S: Substituter,
 {
-    pub(crate) fn new(
-        default_decision: Decision,
-        resource_matcher: R,
-        substituter: S,
-        static_rules: BTreeMap<String, Operations>,
-        variable_rules: BTreeMap<String, Operations>,
-    ) -> Self {
-        Policy {
-            default_decision,
-            resource_matcher,
-            substituter,
-            static_rules,
-            variable_rules,
-        }
-    }
-
     pub fn evaluate(&self, request: &Request) -> Result<Decision> {
         match self.eval_rules(request) {
             // explicit rules deny operation.
@@ -189,7 +176,7 @@ impl Resources {
 
     pub fn merge(&mut self, collection: Resources) {
         for (key, value) in collection.0 {
-            self.insert(key, value);
+            self.insert(&key, value);
         }
     }
 
@@ -197,18 +184,13 @@ impl Resources {
         self.0.is_empty()
     }
 
-    pub fn insert(&mut self, resource: String, effect: EffectOrd) {
-        let entry = self.0.entry(resource);
+    pub fn insert(&mut self, resource: &str, effect: EffectOrd) {
+        let entry = self.0.entry(resource.to_string());
         match entry {
             Entry::Vacant(item) => {
                 item.insert(effect);
             }
-            Entry::Occupied(mut item) => {
-                // lower the order => higher the effect priority.
-                if item.get().order > effect.order {
-                    item.insert(effect);
-                }
-            }
+            Entry::Occupied(mut item) => item.get_mut().merge(effect),
         }
     }
 }
@@ -260,14 +242,14 @@ impl From<Effect> for Decision {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
 pub enum Effect {
     Allow,
     Deny,
     Undefined,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
 pub struct EffectOrd {
     order: usize,
     effect: Effect,
@@ -277,13 +259,20 @@ impl EffectOrd {
     pub fn new(effect: Effect, order: usize) -> Self {
         Self { order, effect }
     }
+
+    pub fn merge(&mut self, item: EffectOrd) {
+        // lower the order => higher the effect priority.
+        if self.order > item.order {
+            *self = item;
+        }
+    }
 }
 
 #[cfg(test)]
 pub(crate) mod tests {
 
     use super::*;
-    use crate::{DefaultResourceMatcher, DefaultSubstituter, DefaultValidator, PolicyBuilder};
+    use crate::{DefaultResourceMatcher, DefaultSubstituter, DefaultValidator};
 
     #[test]
     fn evaluate_explicit_rule_allowed() {

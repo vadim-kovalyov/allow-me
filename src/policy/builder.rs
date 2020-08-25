@@ -64,13 +64,13 @@ where
             process_statement(&statement, &mut static_rules, &mut variable_rules);
         }
 
-        Ok(Policy::new(
-            self.default_decision,
-            self.matcher.unwrap(),
-            self.substituter.unwrap(),
-            static_rules.0,
-            variable_rules.0,
-        ))
+        Ok(Policy {
+            default_decision: self.default_decision,
+            resource_matcher: self.matcher.unwrap(),
+            substituter: self.substituter.unwrap(),
+            static_rules: static_rules.0,
+            variable_rules: variable_rules.0,
+        })
     }
 }
 
@@ -79,12 +79,10 @@ fn process_statement(
     static_rules: &mut Identities,
     variable_rules: &mut Identities,
 ) {
-    let (i, isub) = process_identities(statement);
+    let (static_ids, variable_ids) = process_identities(statement);
 
-    println!("i: {:?}", i);
-    println!("isub: {:?}", isub);
-    static_rules.merge(i);
-    variable_rules.merge(isub);
+    static_rules.merge(static_ids);
+    variable_rules.merge(variable_ids);
 }
 
 fn process_identities(statement: &Statement20201030) -> (Identities, Identities) {
@@ -92,8 +90,7 @@ fn process_identities(statement: &Statement20201030) -> (Identities, Identities)
     let mut variable_ids = Identities::new();
     for identity in &statement.identities {
         let (static_ops, variable_ops) = process_operations(&statement);
-        println!("operations: {:?}", static_ops);
-        println!("op_substitutions: {:?}", variable_ops);
+
         if is_variable_rule(identity) {
             // if current identity has substitutions,
             // then the whole operation subtree need
@@ -117,8 +114,7 @@ fn process_operations(statement: &Statement20201030) -> (Operations, Operations)
     let mut variable_ops = Operations::new();
     for operation in &statement.operations {
         let (static_res, variable_res) = process_resources(&statement);
-        println!("res: {:?}", static_res);
-        println!("res_sub: {:?}", variable_res);
+
         if is_variable_rule(operation) {
             // if current operation has variables,
             // then the whole resource subtree need
@@ -148,7 +144,7 @@ fn process_resources(statement: &Statement20201030) -> (Resources, Resources) {
             &mut static_res
         };
 
-        map.insert(resource.to_string(), statement.into());
+        map.insert(resource, statement.into());
     }
 
     (static_res, variable_res)
@@ -206,28 +202,25 @@ mod tests {
     use super::*;
     use crate::{DefaultResourceMatcher, DefaultSubstituter, DefaultValidator};
 
+    fn build_policy(json: &str) -> Policy<DefaultResourceMatcher, DefaultSubstituter> {
+        PolicyBuilder::from_json(json)
+            .with_validator(DefaultValidator)
+            .with_matcher(DefaultResourceMatcher)
+            .with_substituter(DefaultSubstituter)
+            .with_default_decision(Decision::Denied)
+            .build()
+            .expect("Unable to build policy from json.")
+    }
+
     #[test]
     fn test_basic_definition() {
         let json = r#"{
             "schemaVersion": "2020-10-30",
             "statements": [
                 {
-                    "effect": "deny",
-                    "identities": [
-                        "contoso.azure-devices.net/rogue_one"
-                    ],
-                    "operations": [
-                        "mqtt:publish"
-                    ],
-                    "resources": [
-                        "events/#"
-                    ]
-                },
-                {
-                    "description": "Allow all iot identities to subscribe",
                     "effect": "allow",
                     "identities": [
-                        "{{iot:identity}}"
+                        "contoso.azure-devices.net/monitor_a"
                     ],
                     "operations": [
                         "mqtt:subscribe"
@@ -247,18 +240,28 @@ mod tests {
                     "resources": [
                         "events/alerts"
                     ]
+                },
+                {
+                    "description": "Deny all other iot identities to subscribe",
+                    "effect": "deny",
+                    "identities": [
+                        "{{iot:identity}}"
+                    ],
+                    "operations": [
+                        "mqtt:subscribe"
+                    ],
+                    "resources": [
+                        "events/#"
+                    ]
                 }
             ]
         }"#;
 
-        let policy = PolicyBuilder::from_json(json)
-            .with_validator(DefaultValidator)
-            .with_matcher(DefaultResourceMatcher)
-            .with_substituter(DefaultSubstituter)
-            .with_default_decision(Decision::Denied)
-            .build()
-            .unwrap();
+        let policy: Policy<DefaultResourceMatcher, DefaultSubstituter> = build_policy(json);
 
-        println!("!!!!!!!! {:?}", policy);
+        assert_eq!(1, policy.variable_rules.len());
+        assert_eq!(2, policy.static_rules.len());
     }
 }
+
+//TODO: test cases + generic struct for Identities/Operations/Resources
