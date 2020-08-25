@@ -262,6 +262,361 @@ mod tests {
         assert_eq!(1, policy.variable_rules.len());
         assert_eq!(2, policy.static_rules.len());
     }
-}
 
-//TODO: test cases + generic struct for Identities/Operations/Resources
+    #[test]
+    fn identity_merge_rules() {
+        let json = r#"{
+            "schemaVersion": "2020-10-30",
+            "statements": [
+                {
+                    "effect": "allow",
+                    "identities": [
+                        "contoso.azure-devices.net/sensor_a"
+                    ],
+                    "operations": [
+                        "mqtt:publish"
+                    ],
+                    "resources": [
+                        "events/telemetry"
+                    ]
+                },
+                {
+                    "effect": "allow",
+                    "identities": [
+                        "contoso.azure-devices.net/sensor_a"
+                    ],
+                    "operations": [
+                        "mqtt:subscribe"
+                    ],
+                    "resources": [
+                        "events/alerts"
+                    ]
+                },
+                {
+                    "effect": "allow",
+                    "identities": [
+                        "contoso.azure-devices.net/sensor_a"
+                    ],
+                    "operations": [
+                        "mqtt:subscribe"
+                    ],
+                    "resources": [
+                        "{{mqtt:client_id}}/#"
+                    ]
+                },
+                {
+                    "effect": "allow",
+                    "identities": [
+                        "contoso.azure-devices.net/sensor_a"
+                    ],
+                    "operations": [
+                        "mqtt:publish"
+                    ],
+                    "resources": [
+                        "{{mqtt:client_id}}/#"
+                    ]
+                }
+            ]
+        }"#;
+
+        let policy: Policy<DefaultResourceMatcher, DefaultSubstituter> = build_policy(json);
+
+        // assert static rules have 1 identity and 2 operations
+        assert_eq!(1, policy.static_rules.len());
+        assert_eq!(
+            2,
+            policy.static_rules["contoso.azure-devices.net/sensor_a"]
+                .0
+                .len()
+        );
+
+        // assert variable rules have 1 identity and 2 operations
+        assert_eq!(1, policy.variable_rules.len());
+        assert_eq!(
+            2,
+            policy.variable_rules["contoso.azure-devices.net/sensor_a"]
+                .0
+                .len()
+        );
+    }
+
+    #[test]
+    fn operation_merge_rules() {
+        let json = r#"{
+            "schemaVersion": "2020-10-30",
+            "statements": [
+                {
+                    "effect": "allow",
+                    "identities": [
+                        "contoso.azure-devices.net/sensor_a"
+                    ],
+                    "operations": [
+                        "mqtt:publish"
+                    ],
+                    "resources": [
+                        "events/telemetry"
+                    ]
+                },
+                {
+                    "effect": "allow",
+                    "identities": [
+                        "contoso.azure-devices.net/sensor_a"
+                    ],
+                    "operations": [
+                        "mqtt:publish"
+                    ],
+                    "resources": [
+                        "events/alerts"
+                    ]
+                },
+                {
+                    "effect": "allow",
+                    "identities": [
+                        "contoso.azure-devices.net/sensor_a"
+                    ],
+                    "operations": [
+                        "mqtt:subscribe"
+                    ],
+                    "resources": [
+                        "{{mqtt:client_id}}/#"
+                    ]
+                },
+                {
+                    "effect": "allow",
+                    "identities": [
+                        "contoso.azure-devices.net/sensor_a"
+                    ],
+                    "operations": [
+                        "mqtt:subscribe"
+                    ],
+                    "resources": [
+                        "devices/{{mqtt:client_id}}/#"
+                    ]
+                }
+            ]
+        }"#;
+
+        let policy: Policy<DefaultResourceMatcher, DefaultSubstituter> = build_policy(json);
+
+        // assert static rules have 1 identity, 1 operations and 2 resources
+        assert_eq!(
+            1,
+            policy.static_rules["contoso.azure-devices.net/sensor_a"]
+                .0
+                .len()
+        );
+        assert_eq!(
+            2,
+            policy.static_rules["contoso.azure-devices.net/sensor_a"].0["mqtt:publish"]
+                .0
+                .len()
+        );
+
+        // assert variable rules have 1 identity, 1 operations and 2 resources
+        assert_eq!(
+            1,
+            policy.variable_rules["contoso.azure-devices.net/sensor_a"]
+                .0
+                .len()
+        );
+        assert_eq!(
+            2,
+            policy.variable_rules["contoso.azure-devices.net/sensor_a"].0["mqtt:subscribe"]
+                .0
+                .len()
+        );
+    }
+
+    #[test]
+    fn resource_merge_rules_higher_priority_statement_wins() {
+        let json = r#"{
+            "schemaVersion": "2020-10-30",
+            "statements": [
+                {
+                    "effect": "allow",
+                    "identities": [
+                        "contoso.azure-devices.net/sensor_a"
+                    ],
+                    "operations": [
+                        "mqtt:publish"
+                    ],
+                    "resources": [
+                        "events/telemetry"
+                    ]
+                },
+                {
+                    "effect": "deny",
+                    "identities": [
+                        "contoso.azure-devices.net/sensor_a"
+                    ],
+                    "operations": [
+                        "mqtt:publish"
+                    ],
+                    "resources": [
+                        "events/telemetry"
+                    ]
+                },
+                {
+                    "effect": "allow",
+                    "identities": [
+                        "contoso.azure-devices.net/sensor_a"
+                    ],
+                    "operations": [
+                        "mqtt:subscribe"
+                    ],
+                    "resources": [
+                        "{{mqtt:client_id}}/#"
+                    ]
+                },
+                {
+                    "effect": "deny",
+                    "identities": [
+                        "contoso.azure-devices.net/sensor_a"
+                    ],
+                    "operations": [
+                        "mqtt:subscribe"
+                    ],
+                    "resources": [
+                        "{{mqtt:client_id}}/#"
+                    ]
+                }
+            ]
+        }"#;
+
+        let policy: Policy<DefaultResourceMatcher, DefaultSubstituter> = build_policy(json);
+
+        // assert higher priority rule wins.
+        assert_eq!(
+            EffectOrd {
+                order: 0,
+                effect: CoreEffect::Allow
+            },
+            policy.static_rules["contoso.azure-devices.net/sensor_a"].0["mqtt:publish"].0
+                ["events/telemetry"]
+        );
+
+        // assert higher priority rule wins for variable rules.
+        assert_eq!(
+            EffectOrd {
+                order: 2,
+                effect: CoreEffect::Allow
+            },
+            policy.variable_rules["contoso.azure-devices.net/sensor_a"].0["mqtt:subscribe"].0
+                ["{{mqtt:client_id}}/#"]
+        );
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)]
+    fn grouping_rules_with_variables_test() {
+        let json = r#"{
+            "schemaVersion": "2020-10-30",
+            "statements": [
+                {
+                    "effect": "allow",
+                    "identities": [
+                        "contoso.azure-devices.net/sensor_a",
+                        "contoso.azure-devices.net/sensor_b",
+                        "{{iot:identity}}"
+                    ],
+                    "operations": [
+                        "mqtt:publish",
+                        "mqtt:subscribe"
+                    ],
+                    "resources": [
+                        "events/telemetry",
+                        "devices/{{mqtt:client_id}}/#"
+                    ]
+                }
+            ]
+        }"#;
+
+        let policy: Policy<DefaultResourceMatcher, DefaultSubstituter> = build_policy(json);
+
+        // assert static rules.
+        assert_eq!(2, policy.static_rules.len());
+        assert_eq!(
+            policy.static_rules["contoso.azure-devices.net/sensor_a"].0["mqtt:publish"].0
+                ["events/telemetry"],
+            EffectOrd {
+                effect: CoreEffect::Allow,
+                order: 0
+            }
+        );
+        assert_eq!(
+            policy.static_rules["contoso.azure-devices.net/sensor_a"].0["mqtt:subscribe"].0
+                ["events/telemetry"],
+            EffectOrd {
+                effect: CoreEffect::Allow,
+                order: 0
+            }
+        );
+        assert_eq!(
+            policy.static_rules["contoso.azure-devices.net/sensor_b"].0["mqtt:publish"].0
+                ["events/telemetry"],
+            EffectOrd {
+                effect: CoreEffect::Allow,
+                order: 0
+            }
+        );
+        assert_eq!(
+            policy.static_rules["contoso.azure-devices.net/sensor_b"].0["mqtt:subscribe"].0
+                ["events/telemetry"],
+            EffectOrd {
+                effect: CoreEffect::Allow,
+                order: 0
+            }
+        );
+
+        // assert variable rules.
+        assert_eq!(3, policy.variable_rules.len());
+        assert_eq!(
+            policy.variable_rules["contoso.azure-devices.net/sensor_a"].0["mqtt:publish"].0
+                ["devices/{{mqtt:client_id}}/#"],
+            EffectOrd {
+                effect: CoreEffect::Allow,
+                order: 0
+            }
+        );
+        assert_eq!(
+            policy.variable_rules["contoso.azure-devices.net/sensor_a"].0["mqtt:subscribe"].0
+                ["devices/{{mqtt:client_id}}/#"],
+            EffectOrd {
+                effect: CoreEffect::Allow,
+                order: 0
+            }
+        );
+        assert_eq!(
+            policy.variable_rules["contoso.azure-devices.net/sensor_b"].0["mqtt:publish"].0
+                ["devices/{{mqtt:client_id}}/#"],
+            EffectOrd {
+                effect: CoreEffect::Allow,
+                order: 0
+            }
+        );
+        assert_eq!(
+            policy.variable_rules["contoso.azure-devices.net/sensor_b"].0["mqtt:subscribe"].0
+                ["devices/{{mqtt:client_id}}/#"],
+            EffectOrd {
+                effect: CoreEffect::Allow,
+                order: 0
+            }
+        );
+        assert_eq!(
+            policy.variable_rules["{{iot:identity}}"].0["mqtt:publish"].0
+                ["devices/{{mqtt:client_id}}/#"],
+            EffectOrd {
+                effect: CoreEffect::Allow,
+                order: 0
+            }
+        );
+        assert_eq!(
+            policy.variable_rules["{{iot:identity}}"].0["mqtt:subscribe"].0
+                ["devices/{{mqtt:client_id}}/#"],
+            EffectOrd {
+                effect: CoreEffect::Allow,
+                order: 0
+            }
+        );
+    }
+}
