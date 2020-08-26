@@ -6,6 +6,14 @@ use std::collections::{btree_map::Entry, BTreeMap};
 use crate::errors::Result;
 use crate::{substituter::Substituter, Error, ResourceMatcher};
 
+/// Policy engine. Represents a read-only set of rules and can
+/// evaluate `Request` based on those rules.
+///
+/// Policy engine consists of two sets:
+/// - static rules
+/// - variable rules - any rule that contains variables ("{{..}}").
+/// Static rules are organized in a data structure with near-constant querying time.
+/// Variable rules are evaluated on every request.
 #[derive(Debug)]
 pub struct Policy<R, S> {
     default_decision: Decision,
@@ -20,23 +28,26 @@ where
     R: ResourceMatcher,
     S: Substituter,
 {
+    /// Evaluates the provided `&Request` and produces the `Decision`.
+    ///
+    /// If no rules match the `&Request` - the default `Decision` is returned.
     pub fn evaluate(&self, request: &Request) -> Result<Decision> {
-        match self.eval_rules(request) {
-            // explicit rules deny operation.
+        match self.eval_static_rules(request) {
+            // static rules deny operation.
             Ok(Effect::Deny) => Ok(Decision::Denied),
-            // explicit rules allow operation. Still need to check substitution rules.
-            Ok(Effect::Allow) => match self.eval_substitutions(request) {
-                // Substitution rules undefined. Proceed to allow operation.
+            // static rules allow operation. Still need to check variable rules.
+            Ok(Effect::Allow) => match self.eval_variable_rules(request) {
+                // variable rules undefined. Proceed to allow operation.
                 Ok(Effect::Undefined) => Ok(Decision::Allowed),
-                // Substitution rules defined. Return the decision.
+                // variable rules defined. Return the decision.
                 Ok(effect) => Ok(effect.into()),
                 Err(e) => Err(e),
             },
-            // explicit rules not defined. Need to check substitution rules.
-            Ok(Effect::Undefined) => match self.eval_substitutions(request) {
-                // Substitution rules undefined as well. Return default decision.
+            // static rules not defined. Need to check variable rules.
+            Ok(Effect::Undefined) => match self.eval_variable_rules(request) {
+                // variable rules undefined as well. Return default decision.
                 Ok(Effect::Undefined) => Ok(self.default_decision),
-                // Substitution rules defined. Return the decision.
+                // variable rules defined. Return the decision.
                 Ok(effect) => Ok(effect.into()),
                 Err(e) => Err(e),
             },
@@ -44,12 +55,12 @@ where
         }
     }
 
-    fn eval_rules(&self, request: &Request) -> Result<Effect> {
+    fn eval_static_rules(&self, request: &Request) -> Result<Effect> {
         // lookup an identity
         match self.static_rules.get(&request.identity) {
-            // identity rules exist. Look up operations.
+            // identity exists. Look up operations.
             Some(operations) => match operations.0.get(&request.operation) {
-                // operation exist.
+                // operation exists.
                 Some(resources) => {
                     // Iterate over and match resources.
                     for (resource, effect) in &resources.0 {
@@ -68,11 +79,11 @@ where
         }
     }
 
-    fn eval_substitutions(&self, request: &Request) -> Result<Effect> {
+    fn eval_variable_rules(&self, request: &Request) -> Result<Effect> {
         for (identity, operations) in &self.variable_rules {
-            // process identity substitution.
+            // process identity variables.
             let identity = self.substituter.visit_identity(identity, request)?;
-            // check if it does match after substitution.
+            // check if it does match after processing variables.
             if identity == request.identity {
                 // lookup operation.
                 return match operations.0.get(&request.operation) {
@@ -272,6 +283,7 @@ impl EffectOrd {
 pub(crate) mod tests {
     use super::*;
     use crate::{DefaultResourceMatcher, DefaultSubstituter};
+    use matches::assert_matches;
 
     /// Helper method to build a policy.
     /// Used in both policy and builder tests.
@@ -283,17 +295,29 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn evaluate_explicit_rule_allowed() {
+    fn evaluate_static_rules() {
         let json = r#"{
             "schemaVersion": "2020-10-30",
             "statements": [
                 {
-                    "effect": "allow",
+                    "effect": "deny",
                     "identities": [
                         "contoso.azure-devices.net/sensor_a"
                     ],
                     "operations": [
                         "mqtt:publish"
+                    ],
+                    "resources": [
+                        "events/alerts"
+                    ]
+                },
+                {
+                    "effect": "allow",
+                    "identities": [
+                        "contoso.azure-devices.net/sensor_b"
+                    ],
+                    "operations": [
+                        "mqtt:subscribe"
                     ],
                     "resources": [
                         "events/alerts"
@@ -311,15 +335,80 @@ pub(crate) mod tests {
         )
         .unwrap();
 
-        let result = policy.evaluate(&request).unwrap();
-        assert_eq!(Decision::Allowed, result);
+        assert_matches!(policy.evaluate(&request), Ok(Decision::Denied));
+
+        let request = Request::new(
+            "contoso.azure-devices.net/sensor_b".into(),
+            "mqtt:subscribe".into(),
+            "events/alerts".into(),
+        )
+        .unwrap();
+
+        assert_matches!(policy.evaluate(&request), Ok(Decision::Allowed));
     }
 
     #[test]
-    fn evaluate_explicit_rule_denied() {
+    fn evaluate_undefined_rules_expected_default_action() {
         let json = r#"{
             "schemaVersion": "2020-10-30",
             "statements": [
+                {
+                    "effect": "allow",
+                    "identities": [
+                        "contoso.azure-devices.net/some_device"
+                    ],
+                    "operations": [
+                        "mqtt:publish"
+                    ],
+                    "resources": [
+                        "events/alerts"
+                    ]
+                }
+            ]
+        }"#;
+
+        let request = Request::new(
+            "contoso.azure-devices.net/some_other_device".into(),
+            "mqtt:publish".into(),
+            "events/alerts".into(),
+        )
+        .unwrap();
+
+        let allow_default_policy = PolicyBuilder::from_json(json)
+            .with_default_decision(Decision::Allowed)
+            .build()
+            .expect("Unable to build policy from json.");
+
+        assert_matches!(
+            allow_default_policy.evaluate(&request),
+            Ok(Decision::Allowed)
+        );
+
+        let deny_default_policy = PolicyBuilder::from_json(json)
+            .with_default_decision(Decision::Denied)
+            .build()
+            .expect("Unable to build policy from json.");
+
+        assert_matches!(deny_default_policy.evaluate(&request), Ok(Decision::Denied));
+    }
+
+    #[test]
+    fn evaluate_static_variable_rule_conflict_first_rule_wins() {
+        let json = r#"{
+            "schemaVersion": "2020-10-30",
+            "statements": [
+                {
+                    "effect": "allow",
+                    "identities": [
+                        "contoso.azure-devices.net/sensor_a"
+                    ],
+                    "operations": [
+                        "mqtt:publish"
+                    ],
+                    "resources": [
+                        "events/alerts"
+                    ]
+                },
                 {
                     "effect": "deny",
                     "identities": [
@@ -345,16 +434,7 @@ pub(crate) mod tests {
         .unwrap();
 
         let result = policy.evaluate(&request).unwrap();
-        assert_eq!(Decision::Denied, result);
+        assert_eq!(Decision::Allowed, result);
+        todo!()
     }
-
-    fn evaluate_explicit_rule_undefined_expected_default_action() {}
-
-    fn evaluate_explicit_rule_allowed_substitution_rule_denied_expected_denied() {}
-
-    fn evaluate_explicit_rule_denied_substitution_rule_allowed_expected_denied() {}
-
-    fn evaluate_explicit_rule_empty_resource_allowed() {}
-
-    fn evaluate_explicit_rule_empty_resource_denied() {}
 }
