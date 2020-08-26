@@ -270,9 +270,17 @@ impl EffectOrd {
 
 #[cfg(test)]
 pub(crate) mod tests {
-
     use super::*;
-    use crate::{DefaultResourceMatcher, DefaultSubstituter, DefaultValidator};
+    use crate::{DefaultResourceMatcher, DefaultSubstituter};
+
+    /// Helper method to build a policy.
+    /// Used in both policy and builder tests.
+    pub(crate) fn build_policy(json: &str) -> Policy<DefaultResourceMatcher, DefaultSubstituter> {
+        PolicyBuilder::from_json(json)
+            .with_default_decision(Decision::Denied)
+            .build()
+            .expect("Unable to build policy from json.")
+    }
 
     #[test]
     fn evaluate_explicit_rule_allowed() {
@@ -294,13 +302,7 @@ pub(crate) mod tests {
             ]
         }"#;
 
-        let policy = PolicyBuilder::from_json(json)
-            .with_validator(DefaultValidator)
-            .with_matcher(DefaultResourceMatcher)
-            .with_substituter(DefaultSubstituter)
-            .with_default_decision(Decision::Denied)
-            .build()
-            .unwrap();
+        let policy = build_policy(json);
 
         let request = Request::new(
             "contoso.azure-devices.net/sensor_a".into(),
@@ -313,7 +315,38 @@ pub(crate) mod tests {
         assert_eq!(Decision::Allowed, result);
     }
 
-    fn evaluate_explicit_rule_denied() {}
+    #[test]
+    fn evaluate_explicit_rule_denied() {
+        let json = r#"{
+            "schemaVersion": "2020-10-30",
+            "statements": [
+                {
+                    "effect": "deny",
+                    "identities": [
+                        "contoso.azure-devices.net/sensor_a"
+                    ],
+                    "operations": [
+                        "mqtt:publish"
+                    ],
+                    "resources": [
+                        "events/alerts"
+                    ]
+                }
+            ]
+        }"#;
+
+        let policy = build_policy(json);
+
+        let request = Request::new(
+            "contoso.azure-devices.net/sensor_a".into(),
+            "mqtt:publish".into(),
+            "events/alerts".into(),
+        )
+        .unwrap();
+
+        let result = policy.evaluate(&request).unwrap();
+        assert_eq!(Decision::Denied, result);
+    }
 
     fn evaluate_explicit_rule_undefined_expected_default_action() {}
 

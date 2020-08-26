@@ -1,16 +1,44 @@
+use lazy_static::lazy_static;
+use regex::Regex;
 use serde::Deserialize;
 
 use crate::{
     policy::{Effect as CoreEffect, EffectOrd, Identities, Operations, Resources},
-    Decision, Error, Policy, PolicyValidator, ResourceMatcher, Result, Substituter,
+    validator::Field,
+    Decision, DefaultResourceMatcher, DefaultSubstituter, DefaultValidator, Error, Policy,
+    PolicyValidator, ResourceMatcher, Result, Substituter,
 };
 
+/// A policy builder, responsible for parsing policy definition
+/// and constructing `Policy` struct.
+///
+/// It handles policy definition versioning and allows fine-grained
+/// configuration of `Policy` components.
 pub struct PolicyBuilder<V, M, S> {
-    validator: Option<V>,
-    matcher: Option<M>,
-    substituter: Option<S>,
+    validator: V,
+    matcher: M,
+    substituter: S,
     json: String,
     default_decision: Decision,
+}
+
+impl PolicyBuilder<DefaultValidator, DefaultResourceMatcher, DefaultSubstituter> {
+    /// Construct a `PolicyBuilder` from provided json policy definition and
+    /// default configuration.
+    ///
+    /// Call to this method does not parse or validate the json, all heavy work
+    /// is done in `build` method.
+    pub fn from_json(
+        json: &str,
+    ) -> PolicyBuilder<DefaultValidator, DefaultResourceMatcher, DefaultSubstituter> {
+        PolicyBuilder {
+            json: json.into(),
+            validator: DefaultValidator,
+            matcher: DefaultResourceMatcher,
+            substituter: DefaultSubstituter,
+            default_decision: Decision::Denied,
+        }
+    }
 }
 
 impl<V, M, S> PolicyBuilder<V, M, S>
@@ -19,42 +47,58 @@ where
     M: ResourceMatcher,
     S: Substituter,
 {
-    pub fn from_json(json: &str) -> Self {
-        Self {
-            json: json.into(),
-            validator: None,
-            matcher: None,
-            substituter: None,
-            default_decision: Decision::Denied,
+    /// Specifies the `PolicyValidator` to validate the policy definition.
+    pub fn with_validator<V1>(self, validator: V1) -> PolicyBuilder<V1, M, S> {
+        PolicyBuilder {
+            json: self.json,
+            validator,
+            matcher: self.matcher,
+            substituter: self.substituter,
+            default_decision: self.default_decision,
         }
     }
 
-    pub fn with_validator(mut self, validator: V) -> Self {
-        self.validator = Some(validator);
-        self
+    /// Specifies the `ResourceMatcher` to use with `Policy`.
+    pub fn with_matcher<M1>(self, matcher: M1) -> PolicyBuilder<V, M1, S> {
+        PolicyBuilder {
+            json: self.json,
+            validator: self.validator,
+            matcher,
+            substituter: self.substituter,
+            default_decision: self.default_decision,
+        }
     }
 
-    pub fn with_matcher(mut self, matcher: M) -> Self {
-        self.matcher = Some(matcher);
-        self
+    /// Specifies the `Substituter` to use with `Policy`.
+    pub fn with_substituter<S1>(self, substituter: S1) -> PolicyBuilder<V, M, S1> {
+        PolicyBuilder {
+            json: self.json,
+            validator: self.validator,
+            matcher: self.matcher,
+            substituter,
+            default_decision: self.default_decision,
+        }
     }
 
-    pub fn with_substituter(mut self, substituter: S) -> Self {
-        self.substituter = Some(substituter);
-        self
-    }
-
+    /// Specifies the default decision that `Policy` will return if
+    /// no rules match the request.
     pub fn with_default_decision(mut self, decision: Decision) -> Self {
         self.default_decision = decision;
         self
     }
 
+    /// Builds a `Policy` consuming the builder.
     pub fn build(self) -> Result<Policy<M, S>> {
         let mut definition: PolicyDefinition20201030 =
             serde_json::from_str(&self.json).map_err(Error::Deserializing)?;
 
         for (order, mut statement) in definition.statements.iter_mut().enumerate() {
             statement.order = order;
+        }
+
+        let errors = self.validate(&definition);
+        if !errors.is_empty() {
+            return Err(Error::ValidationSummary(errors));
         }
 
         let mut static_rules = Identities::new();
@@ -66,11 +110,44 @@ where
 
         Ok(Policy {
             default_decision: self.default_decision,
-            resource_matcher: self.matcher.unwrap(),
-            substituter: self.substituter.unwrap(),
+            resource_matcher: self.matcher,
+            substituter: self.substituter,
             static_rules: static_rules.0,
             variable_rules: variable_rules.0,
         })
+    }
+
+    fn validate(&self, definition: &PolicyDefinition20201030) -> Vec<Error> {
+        definition
+            .statements
+            .iter()
+            .flat_map(|statement| {
+                let des_errors = self
+                    .validator
+                    .validate(Field::Description, &statement.description)
+                    .err();
+
+                let ids_errors = statement
+                    .identities
+                    .iter()
+                    .filter_map(|id| self.validator.validate(Field::Identities, id).err());
+
+                let ops_errors = statement
+                    .operations
+                    .iter()
+                    .filter_map(|op| self.validator.validate(Field::Operations, op).err());
+
+                let res_errors = statement
+                    .resources
+                    .iter()
+                    .filter_map(|res| self.validator.validate(Field::Resources, res).err());
+
+                ids_errors
+                    .chain(ops_errors)
+                    .chain(res_errors)
+                    .chain(des_errors)
+            })
+            .collect()
     }
 }
 
@@ -151,7 +228,11 @@ fn process_resources(statement: &Statement20201030) -> (Resources, Resources) {
 }
 
 fn is_variable_rule(value: &str) -> bool {
-    value.contains("{{") //TODO: change to regex
+    lazy_static! {
+        static ref VAR_PATTERN: Regex =
+            Regex::new(r#"\{\{[^\{\}]+\}\}"#).expect("failed to create a Regex from pattern");
+    }
+    VAR_PATTERN.is_match(value)
 }
 
 #[derive(Deserialize)]
@@ -200,17 +281,8 @@ impl Into<EffectOrd> for &Statement20201030 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{DefaultResourceMatcher, DefaultSubstituter, DefaultValidator};
-
-    fn build_policy(json: &str) -> Policy<DefaultResourceMatcher, DefaultSubstituter> {
-        PolicyBuilder::from_json(json)
-            .with_validator(DefaultValidator)
-            .with_matcher(DefaultResourceMatcher)
-            .with_substituter(DefaultSubstituter)
-            .with_default_decision(Decision::Denied)
-            .build()
-            .expect("Unable to build policy from json.")
-    }
+    use crate::policy::tests::build_policy;
+    use matches::assert_matches;
 
     #[test]
     fn test_basic_definition() {
@@ -257,7 +329,7 @@ mod tests {
             ]
         }"#;
 
-        let policy: Policy<DefaultResourceMatcher, DefaultSubstituter> = build_policy(json);
+        let policy = build_policy(json);
 
         assert_eq!(1, policy.variable_rules.len());
         assert_eq!(2, policy.static_rules.len());
@@ -319,7 +391,7 @@ mod tests {
             ]
         }"#;
 
-        let policy: Policy<DefaultResourceMatcher, DefaultSubstituter> = build_policy(json);
+        let policy = build_policy(json);
 
         // assert static rules have 1 identity and 2 operations
         assert_eq!(1, policy.static_rules.len());
@@ -396,7 +468,7 @@ mod tests {
             ]
         }"#;
 
-        let policy: Policy<DefaultResourceMatcher, DefaultSubstituter> = build_policy(json);
+        let policy = build_policy(json);
 
         // assert static rules have 1 identity, 1 operations and 2 resources
         assert_eq!(
@@ -483,7 +555,7 @@ mod tests {
             ]
         }"#;
 
-        let policy: Policy<DefaultResourceMatcher, DefaultSubstituter> = build_policy(json);
+        let policy = build_policy(json);
 
         // assert higher priority rule wins.
         assert_eq!(
@@ -531,7 +603,7 @@ mod tests {
             ]
         }"#;
 
-        let policy: Policy<DefaultResourceMatcher, DefaultSubstituter> = build_policy(json);
+        let policy = build_policy(json);
 
         // assert static rules.
         assert_eq!(2, policy.static_rules.len());
@@ -618,5 +690,57 @@ mod tests {
                 order: 0
             }
         );
+    }
+
+    #[test]
+    fn policy_validation_test() {
+        let json = r#"{
+            "schemaVersion": "2020-10-30",
+            "statements": [
+                {
+                    "effect": "allow",
+                    "identities": [
+                        "contoso.azure-devices.net/sensor_a"
+                    ],
+                    "operations": [
+                        "mqtt:publish"
+                    ],
+                    "resources": [
+                        "events/telemetry"
+                    ]
+                },
+                {
+                    "effect": "allow",
+                    "identities": [
+                        "contoso.azure-devices.net/monitor"
+                    ],
+                    "operations": [
+                        "mqtt:subscribe"
+                    ],
+                    "resources": [
+                        "events/telemetry"
+                    ]
+                }
+            ]
+        }"#;
+
+        let result = PolicyBuilder::from_json(json)
+            .with_validator(FailAllValidator)
+            .with_default_decision(Decision::Denied)
+            .build();
+
+        assert_matches!(result, Err(Error::ValidationSummary(errors)) if errors.len() == 8 );
+    }
+
+    #[derive(Debug)]
+    struct FailAllValidator;
+
+    impl PolicyValidator for FailAllValidator {
+        fn validate(&self, field: Field, value: &str) -> Result<()> {
+            Err(Error::Validation(format!(
+                "Unable to parse value {:?} for field {:?}",
+                value, field
+            )))
+        }
     }
 }

@@ -1,9 +1,10 @@
-use crate::Error;
+use crate::errors::Result;
 
 pub trait PolicyValidator {
-    fn validate(field: Field, value: &str) -> Result<(), Error>;
+    fn validate(&self, field: Field, value: &str) -> Result<()>;
 }
 
+#[derive(Debug)]
 pub enum Field {
     Identities,
     Operations,
@@ -15,7 +16,7 @@ pub enum Field {
 pub struct DefaultValidator;
 
 impl PolicyValidator for DefaultValidator {
-    fn validate(_field: Field, _value: &str) -> Result<(), Error> {
+    fn validate(&self, _field: Field, _value: &str) -> Result<()> {
         Ok(())
     }
 }

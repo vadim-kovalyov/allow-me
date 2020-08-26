@@ -1,11 +1,17 @@
 [package]
-name = "allow-me-rs"
-description = "Simple json-based authorization policy engine."
-version = "0.1.0"
 authors = ["Vadim Kovalyov <vadim.kovalyov@gmail.com>"]
+description = "Simple json-based authorization policy engine."
 edition = "2018"
+name = "allow-me-rs"
+version = "0.1.0"
 
 [dependencies]
-thiserror = "1.0"
+lazy_static = "1"
+matches = "0.1"
+regex = "1"
 serde_json = "1.0"
-serde = { version = "1.0", features = ["derive"] }
+thiserror = "1.0"
+
+[dependencies.serde]
+features = ["derive"]
+version = "1.0"
