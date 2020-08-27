@@ -33,29 +33,47 @@ where
     /// If no rules match the `&Request` - the default `Decision` is returned.
     pub fn evaluate(&self, request: &Request) -> Result<Decision> {
         match self.eval_static_rules(request) {
-            // static rules deny operation.
-            Ok(Effect::Deny) => Ok(Decision::Denied),
-            // static rules allow operation. Still need to check variable rules.
-            Ok(Effect::Allow) => match self.eval_variable_rules(request) {
-                // variable rules undefined. Proceed to allow operation.
-                Ok(Effect::Undefined) => Ok(Decision::Allowed),
-                // variable rules defined. Return the decision.
-                Ok(effect) => Ok(effect.into()),
-                Err(e) => Err(e),
-            },
             // static rules not defined. Need to check variable rules.
-            Ok(Effect::Undefined) => match self.eval_variable_rules(request) {
+            Ok(EffectOrd {
+                effect: Effect::Undefined,
+                ..
+            }) => match self.eval_variable_rules(request) {
                 // variable rules undefined as well. Return default decision.
-                Ok(Effect::Undefined) => Ok(self.default_decision),
+                Ok(EffectOrd {
+                    effect: Effect::Undefined,
+                    ..
+                }) => Ok(self.default_decision),
                 // variable rules defined. Return the decision.
                 Ok(effect) => Ok(effect.into()),
                 Err(e) => Err(e),
             },
+            // static rules are defined. Evaluate variable rules and compare priority.
+            Ok(static_effect) => {
+                match self.eval_variable_rules(request) {
+                    // variable rules undefined. Proceed with static rule decision.
+                    Ok(EffectOrd {
+                        effect: Effect::Undefined,
+                        ..
+                    }) => Ok(static_effect.into()),
+                    // variable rules defined. Compare priority and return.
+                    Ok(variable_effect) => {
+                        // compare order.
+                        Ok(if variable_effect > static_effect {
+                            static_effect
+                        } else {
+                            variable_effect
+                        }
+                        .into())
+                    }
+                    Err(e) => Err(e),
+                }
+            }
+
             Err(e) => Err(e),
         }
     }
 
-    fn eval_static_rules(&self, request: &Request) -> Result<Effect> {
+    fn eval_static_rules(&self, request: &Request) -> Result<EffectOrd> {
         // lookup an identity
         match self.static_rules.get(&request.identity) {
             // identity exists. Look up operations.
@@ -68,18 +86,18 @@ where
                             .resource_matcher
                             .do_match(request, &request.resource, &resource)
                         {
-                            return Ok(effect.effect);
+                            return Ok(*effect);
                         }
                     }
-                    Ok(Effect::Undefined)
+                    Ok(EffectOrd::undefined())
                 }
-                None => Ok(Effect::Undefined),
+                None => Ok(EffectOrd::undefined()),
             },
-            None => Ok(Effect::Undefined),
+            None => Ok(EffectOrd::undefined()),
         }
     }
 
-    fn eval_variable_rules(&self, request: &Request) -> Result<Effect> {
+    fn eval_variable_rules(&self, request: &Request) -> Result<EffectOrd> {
         for (identity, operations) in &self.variable_rules {
             // process identity variables.
             let identity = self.substituter.visit_identity(identity, request)?;
@@ -96,16 +114,16 @@ where
                                 .resource_matcher
                                 .do_match(request, &request.resource, &resource)
                             {
-                                return Ok(effect.effect);
+                                return Ok(*effect);
                             }
                         }
-                        Ok(Effect::Undefined)
+                        Ok(EffectOrd::undefined())
                     }
-                    None => Ok(Effect::Undefined),
+                    None => Ok(EffectOrd::undefined()),
                 };
             }
         }
-        Ok(Effect::Undefined)
+        Ok(EffectOrd::undefined())
     }
 }
 
@@ -260,7 +278,7 @@ pub enum Effect {
     Undefined,
 }
 
-#[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct EffectOrd {
     order: usize,
     effect: Effect,
@@ -271,10 +289,33 @@ impl EffectOrd {
         Self { order, effect }
     }
 
+    pub fn undefined() -> Self {
+        Self {
+            order: 0,
+            effect: Effect::Undefined,
+        }
+    }
+
     pub fn merge(&mut self, item: EffectOrd) {
         // lower the order => higher the effect priority.
         if self.order > item.order {
             *self = item;
+        }
+    }
+}
+
+impl PartialOrd for EffectOrd {
+    fn partial_cmp(&self, _other: &Self) -> Option<std::cmp::Ordering> {
+        todo!()
+    }
+}
+
+impl From<EffectOrd> for Decision {
+    fn from(effect: EffectOrd) -> Self {
+        match effect.effect {
+            Effect::Allow => Decision::Allowed,
+            Effect::Deny => Decision::Denied,
+            Effect::Undefined => Decision::Denied,
         }
     }
 }
