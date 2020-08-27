@@ -13,11 +13,7 @@ fn main() -> Result<()> {
         .with_default_decision(Decision::Denied)
         .build()?;
 
-    let request = Request::new(
-        "contoso.azure-devices.net/sensor_a".into(),
-        "mqtt::publish".into(),
-        "events/alerts".into(),
-    )?;
+    let request = Request::new("actor_a".into(), "write".into(), "resource_1".into())?;
 
     let result = policy.evaluate(&request)?;
     println!("Result of policy evaluation: {:?}", result);

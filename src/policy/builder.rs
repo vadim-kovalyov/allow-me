@@ -299,35 +299,35 @@ mod tests {
                         "contoso.azure-devices.net/monitor_a"
                     ],
                     "operations": [
-                        "mqtt:subscribe"
+                        "read"
                     ],
                     "resources": [
-                        "events/#"
+                        "resource_group"
                     ]
                 },
                 {
                     "effect": "allow",
                     "identities": [
-                        "contoso.azure-devices.net/sensor_a"
+                        "actor_a"
                     ],
                     "operations": [
-                        "mqtt:publish"
+                        "write"
                     ],
                     "resources": [
-                        "events/alerts"
+                        "resource_1"
                     ]
                 },
                 {
-                    "description": "Deny all other iot identities to subscribe",
+                    "description": "Deny all other identities to read",
                     "effect": "deny",
                     "identities": [
-                        "{{iot:identity}}"
+                        "{{var_actor}}"
                     ],
                     "operations": [
-                        "mqtt:subscribe"
+                        "read"
                     ],
                     "resources": [
-                        "events/#"
+                        "resource_group"
                     ]
                 }
             ]
@@ -347,10 +347,10 @@ mod tests {
                 {
                     "effect": "allow",
                     "identities": [
-                        "contoso.azure-devices.net/sensor_a"
+                        "actor_a"
                     ],
                     "operations": [
-                        "mqtt:publish"
+                        "write"
                     ],
                     "resources": [
                         "events/telemetry"
@@ -359,37 +359,37 @@ mod tests {
                 {
                     "effect": "allow",
                     "identities": [
-                        "contoso.azure-devices.net/sensor_a"
+                        "actor_a"
                     ],
                     "operations": [
-                        "mqtt:subscribe"
+                        "read"
                     ],
                     "resources": [
-                        "events/alerts"
+                        "resource_1"
                     ]
                 },
                 {
                     "effect": "allow",
                     "identities": [
-                        "contoso.azure-devices.net/sensor_a"
+                        "actor_a"
                     ],
                     "operations": [
-                        "mqtt:subscribe"
+                        "read"
                     ],
                     "resources": [
-                        "{{mqtt:client_id}}/#"
+                        "{{variable}}/#"
                     ]
                 },
                 {
                     "effect": "allow",
                     "identities": [
-                        "contoso.azure-devices.net/sensor_a"
+                        "actor_a"
                     ],
                     "operations": [
-                        "mqtt:publish"
+                        "write"
                     ],
                     "resources": [
-                        "{{mqtt:client_id}}/#"
+                        "{{variable}}/#"
                     ]
                 }
             ]
@@ -399,21 +399,11 @@ mod tests {
 
         // assert static rules have 1 identity and 2 operations
         assert_eq!(1, policy.static_rules.len());
-        assert_eq!(
-            2,
-            policy.static_rules["contoso.azure-devices.net/sensor_a"]
-                .0
-                .len()
-        );
+        assert_eq!(2, policy.static_rules["actor_a"].0.len());
 
         // assert variable rules have 1 identity and 2 operations
         assert_eq!(1, policy.variable_rules.len());
-        assert_eq!(
-            2,
-            policy.variable_rules["contoso.azure-devices.net/sensor_a"]
-                .0
-                .len()
-        );
+        assert_eq!(2, policy.variable_rules["actor_a"].0.len());
     }
 
     #[test]
@@ -424,10 +414,10 @@ mod tests {
                 {
                     "effect": "allow",
                     "identities": [
-                        "contoso.azure-devices.net/sensor_a"
+                        "actor_a"
                     ],
                     "operations": [
-                        "mqtt:publish"
+                        "write"
                     ],
                     "resources": [
                         "events/telemetry"
@@ -436,37 +426,37 @@ mod tests {
                 {
                     "effect": "allow",
                     "identities": [
-                        "contoso.azure-devices.net/sensor_a"
+                        "actor_a"
                     ],
                     "operations": [
-                        "mqtt:publish"
+                        "write"
                     ],
                     "resources": [
-                        "events/alerts"
+                        "resource_1"
                     ]
                 },
                 {
                     "effect": "allow",
                     "identities": [
-                        "contoso.azure-devices.net/sensor_a"
+                        "actor_a"
                     ],
                     "operations": [
-                        "mqtt:subscribe"
+                        "read"
                     ],
                     "resources": [
-                        "{{mqtt:client_id}}/#"
+                        "{{variable}}/#"
                     ]
                 },
                 {
                     "effect": "allow",
                     "identities": [
-                        "contoso.azure-devices.net/sensor_a"
+                        "actor_a"
                     ],
                     "operations": [
-                        "mqtt:subscribe"
+                        "read"
                     ],
                     "resources": [
-                        "devices/{{mqtt:client_id}}/#"
+                        "devices/{{variable}}/#"
                     ]
                 }
             ]
@@ -475,32 +465,12 @@ mod tests {
         let policy = build_policy(json);
 
         // assert static rules have 1 identity, 1 operations and 2 resources
-        assert_eq!(
-            1,
-            policy.static_rules["contoso.azure-devices.net/sensor_a"]
-                .0
-                .len()
-        );
-        assert_eq!(
-            2,
-            policy.static_rules["contoso.azure-devices.net/sensor_a"].0["mqtt:publish"]
-                .0
-                .len()
-        );
+        assert_eq!(1, policy.static_rules["actor_a"].0.len());
+        assert_eq!(2, policy.static_rules["actor_a"].0["write"].0.len());
 
         // assert variable rules have 1 identity, 1 operations and 2 resources
-        assert_eq!(
-            1,
-            policy.variable_rules["contoso.azure-devices.net/sensor_a"]
-                .0
-                .len()
-        );
-        assert_eq!(
-            2,
-            policy.variable_rules["contoso.azure-devices.net/sensor_a"].0["mqtt:subscribe"]
-                .0
-                .len()
-        );
+        assert_eq!(1, policy.variable_rules["actor_a"].0.len());
+        assert_eq!(2, policy.variable_rules["actor_a"].0["read"].0.len());
     }
 
     #[test]
@@ -511,10 +481,10 @@ mod tests {
                 {
                     "effect": "allow",
                     "identities": [
-                        "contoso.azure-devices.net/sensor_a"
+                        "actor_a"
                     ],
                     "operations": [
-                        "mqtt:publish"
+                        "write"
                     ],
                     "resources": [
                         "events/telemetry"
@@ -523,10 +493,10 @@ mod tests {
                 {
                     "effect": "deny",
                     "identities": [
-                        "contoso.azure-devices.net/sensor_a"
+                        "actor_a"
                     ],
                     "operations": [
-                        "mqtt:publish"
+                        "write"
                     ],
                     "resources": [
                         "events/telemetry"
@@ -535,25 +505,25 @@ mod tests {
                 {
                     "effect": "allow",
                     "identities": [
-                        "contoso.azure-devices.net/sensor_a"
+                        "actor_a"
                     ],
                     "operations": [
-                        "mqtt:subscribe"
+                        "read"
                     ],
                     "resources": [
-                        "{{mqtt:client_id}}/#"
+                        "{{variable}}/#"
                     ]
                 },
                 {
                     "effect": "deny",
                     "identities": [
-                        "contoso.azure-devices.net/sensor_a"
+                        "actor_a"
                     ],
                     "operations": [
-                        "mqtt:subscribe"
+                        "read"
                     ],
                     "resources": [
-                        "{{mqtt:client_id}}/#"
+                        "{{variable}}/#"
                     ]
                 }
             ]
@@ -567,8 +537,7 @@ mod tests {
                 order: 0,
                 effect: CoreEffect::Allow
             },
-            policy.static_rules["contoso.azure-devices.net/sensor_a"].0["mqtt:publish"].0
-                ["events/telemetry"]
+            policy.static_rules["actor_a"].0["write"].0["events/telemetry"]
         );
 
         // assert higher priority rule wins for variable rules.
@@ -577,8 +546,7 @@ mod tests {
                 order: 2,
                 effect: CoreEffect::Allow
             },
-            policy.variable_rules["contoso.azure-devices.net/sensor_a"].0["mqtt:subscribe"].0
-                ["{{mqtt:client_id}}/#"]
+            policy.variable_rules["actor_a"].0["read"].0["{{variable}}/#"]
         );
     }
 
@@ -591,17 +559,17 @@ mod tests {
                 {
                     "effect": "allow",
                     "identities": [
-                        "contoso.azure-devices.net/sensor_a",
-                        "contoso.azure-devices.net/sensor_b",
-                        "{{iot:identity}}"
+                        "actor_a",
+                        "actor_b",
+                        "{{var_actor}}"
                     ],
                     "operations": [
-                        "mqtt:publish",
-                        "mqtt:subscribe"
+                        "write",
+                        "read"
                     ],
                     "resources": [
                         "events/telemetry",
-                        "devices/{{mqtt:client_id}}/#"
+                        "devices/{{variable}}/#"
                     ]
                 }
             ]
@@ -612,32 +580,28 @@ mod tests {
         // assert static rules.
         assert_eq!(2, policy.static_rules.len());
         assert_eq!(
-            policy.static_rules["contoso.azure-devices.net/sensor_a"].0["mqtt:publish"].0
-                ["events/telemetry"],
+            policy.static_rules["actor_a"].0["write"].0["events/telemetry"],
             EffectOrd {
                 effect: CoreEffect::Allow,
                 order: 0
             }
         );
         assert_eq!(
-            policy.static_rules["contoso.azure-devices.net/sensor_a"].0["mqtt:subscribe"].0
-                ["events/telemetry"],
+            policy.static_rules["actor_a"].0["read"].0["events/telemetry"],
             EffectOrd {
                 effect: CoreEffect::Allow,
                 order: 0
             }
         );
         assert_eq!(
-            policy.static_rules["contoso.azure-devices.net/sensor_b"].0["mqtt:publish"].0
-                ["events/telemetry"],
+            policy.static_rules["actor_b"].0["write"].0["events/telemetry"],
             EffectOrd {
                 effect: CoreEffect::Allow,
                 order: 0
             }
         );
         assert_eq!(
-            policy.static_rules["contoso.azure-devices.net/sensor_b"].0["mqtt:subscribe"].0
-                ["events/telemetry"],
+            policy.static_rules["actor_b"].0["read"].0["events/telemetry"],
             EffectOrd {
                 effect: CoreEffect::Allow,
                 order: 0
@@ -647,48 +611,42 @@ mod tests {
         // assert variable rules.
         assert_eq!(3, policy.variable_rules.len());
         assert_eq!(
-            policy.variable_rules["contoso.azure-devices.net/sensor_a"].0["mqtt:publish"].0
-                ["devices/{{mqtt:client_id}}/#"],
+            policy.variable_rules["actor_a"].0["write"].0["devices/{{variable}}/#"],
             EffectOrd {
                 effect: CoreEffect::Allow,
                 order: 0
             }
         );
         assert_eq!(
-            policy.variable_rules["contoso.azure-devices.net/sensor_a"].0["mqtt:subscribe"].0
-                ["devices/{{mqtt:client_id}}/#"],
+            policy.variable_rules["actor_a"].0["read"].0["devices/{{variable}}/#"],
             EffectOrd {
                 effect: CoreEffect::Allow,
                 order: 0
             }
         );
         assert_eq!(
-            policy.variable_rules["contoso.azure-devices.net/sensor_b"].0["mqtt:publish"].0
-                ["devices/{{mqtt:client_id}}/#"],
+            policy.variable_rules["actor_b"].0["write"].0["devices/{{variable}}/#"],
             EffectOrd {
                 effect: CoreEffect::Allow,
                 order: 0
             }
         );
         assert_eq!(
-            policy.variable_rules["contoso.azure-devices.net/sensor_b"].0["mqtt:subscribe"].0
-                ["devices/{{mqtt:client_id}}/#"],
+            policy.variable_rules["actor_b"].0["read"].0["devices/{{variable}}/#"],
             EffectOrd {
                 effect: CoreEffect::Allow,
                 order: 0
             }
         );
         assert_eq!(
-            policy.variable_rules["{{iot:identity}}"].0["mqtt:publish"].0
-                ["devices/{{mqtt:client_id}}/#"],
+            policy.variable_rules["{{var_actor}}"].0["write"].0["devices/{{variable}}/#"],
             EffectOrd {
                 effect: CoreEffect::Allow,
                 order: 0
             }
         );
         assert_eq!(
-            policy.variable_rules["{{iot:identity}}"].0["mqtt:subscribe"].0
-                ["devices/{{mqtt:client_id}}/#"],
+            policy.variable_rules["{{var_actor}}"].0["read"].0["devices/{{variable}}/#"],
             EffectOrd {
                 effect: CoreEffect::Allow,
                 order: 0
@@ -704,10 +662,10 @@ mod tests {
                 {
                     "effect": "allow",
                     "identities": [
-                        "contoso.azure-devices.net/sensor_a"
+                        "actor_a"
                     ],
                     "operations": [
-                        "mqtt:publish"
+                        "write"
                     ],
                     "resources": [
                         "events/telemetry"
@@ -719,7 +677,7 @@ mod tests {
                         "contoso.azure-devices.net/monitor"
                     ],
                     "operations": [
-                        "mqtt:subscribe"
+                        "read"
                     ],
                     "resources": [
                         "events/telemetry"

@@ -351,25 +351,25 @@ pub(crate) mod tests {
                 {
                     "effect": "deny",
                     "identities": [
-                        "contoso.azure-devices.net/sensor_a"
+                        "actor_a"
                     ],
                     "operations": [
-                        "mqtt:publish"
+                        "write"
                     ],
                     "resources": [
-                        "events/alerts"
+                        "resource_1"
                     ]
                 },
                 {
                     "effect": "allow",
                     "identities": [
-                        "contoso.azure-devices.net/sensor_b"
+                        "actor_b"
                     ],
                     "operations": [
-                        "mqtt:subscribe"
+                        "read"
                     ],
                     "resources": [
-                        "events/alerts"
+                        "resource_1"
                     ]
                 }
             ]
@@ -377,21 +377,11 @@ pub(crate) mod tests {
 
         let policy = build_policy(json);
 
-        let request = Request::new(
-            "contoso.azure-devices.net/sensor_a".into(),
-            "mqtt:publish".into(),
-            "events/alerts".into(),
-        )
-        .unwrap();
+        let request = Request::new("actor_a".into(), "write".into(), "resource_1".into()).unwrap();
 
         assert_matches!(policy.evaluate(&request), Ok(Decision::Denied));
 
-        let request = Request::new(
-            "contoso.azure-devices.net/sensor_b".into(),
-            "mqtt:subscribe".into(),
-            "events/alerts".into(),
-        )
-        .unwrap();
+        let request = Request::new("actor_b".into(), "read".into(), "resource_1".into()).unwrap();
 
         assert_matches!(policy.evaluate(&request), Ok(Decision::Allowed));
     }
@@ -407,10 +397,10 @@ pub(crate) mod tests {
                         "contoso.azure-devices.net/some_device"
                     ],
                     "operations": [
-                        "mqtt:publish"
+                        "write"
                     ],
                     "resources": [
-                        "events/alerts"
+                        "resource_1"
                     ]
                 }
             ]
@@ -419,8 +409,8 @@ pub(crate) mod tests {
         // assert default allow
         let request = Request::new(
             "contoso.azure-devices.net/some_other_device".into(),
-            "mqtt:publish".into(),
-            "events/alerts".into(),
+            "write".into(),
+            "resource_1".into(),
         )
         .unwrap();
 
@@ -451,13 +441,13 @@ pub(crate) mod tests {
                 {
                     "effect": "allow",
                     "identities": [
-                        "contoso.azure-devices.net/sensor_a"
+                        "actor_a"
                     ],
                     "operations": [
-                        "mqtt:publish"
+                        "write"
                     ],
                     "resources": [
-                        "events/alerts"
+                        "resource_1"
                     ]
                 },
                 {
@@ -466,10 +456,10 @@ pub(crate) mod tests {
                         "{{test}}"
                     ],
                     "operations": [
-                        "mqtt:publish"
+                        "write"
                     ],
                     "resources": [
-                        "events/alerts"
+                        "resource_1"
                     ]
                 },               
                 {
@@ -478,22 +468,22 @@ pub(crate) mod tests {
                         "{{test}}"
                     ],
                     "operations": [
-                        "mqtt:subscribe"
+                        "read"
                     ],
                     "resources": [
-                        "events/#"
+                        "resource_group"
                     ]
                 },
                 {
                     "effect": "deny",
                     "identities": [
-                        "contoso.azure-devices.net/sensor_b"
+                        "actor_b"
                     ],
                     "operations": [
-                        "mqtt:subscribe"
+                        "read"
                     ],
                     "resources": [
-                        "events/#"
+                        "resource_group"
                     ]
                 }
             ]
@@ -506,22 +496,13 @@ pub(crate) mod tests {
             .expect("Unable to build policy from json.");
 
         // assert static rule wins
-        let request = Request::new(
-            "contoso.azure-devices.net/sensor_a".into(),
-            "mqtt:publish".into(),
-            "events/alerts".into(),
-        )
-        .unwrap();
+        let request = Request::new("actor_a".into(), "write".into(), "resource_1".into()).unwrap();
 
         assert_matches!(policy.evaluate(&request), Ok(Decision::Allowed));
 
         // assert variable rule wins
-        let request = Request::new(
-            "contoso.azure-devices.net/sensor_b".into(),
-            "mqtt:subscribe".into(),
-            "events/#".into(),
-        )
-        .unwrap();
+        let request =
+            Request::new("actor_b".into(), "read".into(), "resource_group".into()).unwrap();
 
         assert_matches!(policy.evaluate(&request), Ok(Decision::Allowed));
     }
