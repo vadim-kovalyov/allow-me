@@ -1,10 +1,13 @@
-mod builder;
-pub use builder::PolicyBuilder;
-
-use std::collections::{btree_map::Entry, BTreeMap};
+use std::{
+    cmp::Ordering,
+    collections::{btree_map::Entry, BTreeMap},
+};
 
 use crate::errors::Result;
 use crate::{substituter::Substituter, Error, ResourceMatcher};
+
+mod builder;
+pub use builder::PolicyBuilder;
 
 /// Policy engine. Represents a read-only set of rules and can
 /// evaluate `Request` based on those rules.
@@ -128,7 +131,7 @@ where
 }
 
 #[derive(Debug, Clone)]
-pub struct Identities(pub BTreeMap<String, Operations>);
+struct Identities(BTreeMap<String, Operations>);
 
 impl Identities {
     pub fn new() -> Self {
@@ -159,7 +162,7 @@ impl Identities {
 }
 
 #[derive(Debug, Clone)]
-pub struct Operations(BTreeMap<String, Resources>);
+struct Operations(BTreeMap<String, Resources>);
 
 impl Operations {
     pub fn new() -> Self {
@@ -196,7 +199,7 @@ impl From<BTreeMap<String, Resources>> for Operations {
 }
 
 #[derive(Debug, Clone)]
-pub struct Resources(BTreeMap<String, EffectOrd>);
+struct Resources(BTreeMap<String, EffectOrd>);
 
 impl Resources {
     pub fn new() -> Self {
@@ -230,6 +233,7 @@ impl From<BTreeMap<String, EffectOrd>> for Resources {
     }
 }
 
+/// Represents a request that needs to be evaluated by `Policy` engine.
 #[derive(Debug)]
 pub struct Request {
     identity: String,
@@ -238,6 +242,7 @@ pub struct Request {
 }
 
 impl Request {
+    /// Creates a new `Request`. Returns an error if either identity or operation is an empty string.
     pub fn new(identity: String, operation: String, resource: String) -> Result<Self> {
         if identity.is_empty() {
             return Err(Error::BadRequest("Identity must be specified".into()));
@@ -255,6 +260,7 @@ impl Request {
     }
 }
 
+/// Represents a decision on the `Request` to the `Policy` engine.
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Decision {
     Allowed,
@@ -272,14 +278,14 @@ impl From<Effect> for Decision {
 }
 
 #[derive(Debug, Copy, Clone, PartialOrd, PartialEq)]
-pub enum Effect {
+enum Effect {
     Allow,
     Deny,
     Undefined,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub struct EffectOrd {
+struct EffectOrd {
     order: usize,
     effect: Effect,
 }
@@ -296,8 +302,10 @@ impl EffectOrd {
         }
     }
 
+    /// Merges two `EffectOrd` by replacing with the one with higher priority.
+    ///
+    /// Lower the order value => higher the effect priority.
     pub fn merge(&mut self, item: EffectOrd) {
-        // lower the order => higher the effect priority.
         if self.order > item.order {
             *self = item;
         }
@@ -305,8 +313,8 @@ impl EffectOrd {
 }
 
 impl PartialOrd for EffectOrd {
-    fn partial_cmp(&self, _other: &Self) -> Option<std::cmp::Ordering> {
-        todo!()
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.order.cmp(&other.order))
     }
 }
 
@@ -408,6 +416,7 @@ pub(crate) mod tests {
             ]
         }"#;
 
+        // assert default allow
         let request = Request::new(
             "contoso.azure-devices.net/some_other_device".into(),
             "mqtt:publish".into(),
@@ -425,6 +434,7 @@ pub(crate) mod tests {
             Ok(Decision::Allowed)
         );
 
+        // assert default deny
         let deny_default_policy = PolicyBuilder::from_json(json)
             .with_default_decision(Decision::Denied)
             .build()
@@ -453,7 +463,7 @@ pub(crate) mod tests {
                 {
                     "effect": "deny",
                     "identities": [
-                        "contoso.azure-devices.net/sensor_a"
+                        "{{test}}"
                     ],
                     "operations": [
                         "mqtt:publish"
@@ -461,12 +471,41 @@ pub(crate) mod tests {
                     "resources": [
                         "events/alerts"
                     ]
+                },               
+                {
+                    "effect": "allow",
+                    "identities": [
+                        "{{test}}"
+                    ],
+                    "operations": [
+                        "mqtt:subscribe"
+                    ],
+                    "resources": [
+                        "events/#"
+                    ]
+                },
+                {
+                    "effect": "deny",
+                    "identities": [
+                        "contoso.azure-devices.net/sensor_b"
+                    ],
+                    "operations": [
+                        "mqtt:subscribe"
+                    ],
+                    "resources": [
+                        "events/#"
+                    ]
                 }
             ]
         }"#;
 
-        let policy = build_policy(json);
+        let policy = PolicyBuilder::from_json(json)
+            .with_default_decision(Decision::Denied)
+            .with_substituter(TestSubstituter)
+            .build()
+            .expect("Unable to build policy from json.");
 
+        // assert static rule wins
         let request = Request::new(
             "contoso.azure-devices.net/sensor_a".into(),
             "mqtt:publish".into(),
@@ -474,8 +513,95 @@ pub(crate) mod tests {
         )
         .unwrap();
 
-        let result = policy.evaluate(&request).unwrap();
-        assert_eq!(Decision::Allowed, result);
-        todo!()
+        assert_matches!(policy.evaluate(&request), Ok(Decision::Allowed));
+
+        // assert variable rule wins
+        let request = Request::new(
+            "contoso.azure-devices.net/sensor_b".into(),
+            "mqtt:subscribe".into(),
+            "events/#".into(),
+        )
+        .unwrap();
+
+        assert_matches!(policy.evaluate(&request), Ok(Decision::Allowed));
+    }
+
+    #[test]
+    fn evaluate_rule_no_resource() {
+        let json = r#"{
+            "schemaVersion": "2020-10-30",
+            "statements": [
+                {
+                    "effect": "allow",
+                    "identities": [
+                        "actor_a"
+                    ],
+                    "operations": [
+                        "connect"
+                    ]
+                }
+            ]
+        }"#;
+
+        let policy = build_policy(json);
+
+        let request = Request::new("actor_a".into(), "connect".into(), "".into()).unwrap();
+
+        assert_matches!(policy.evaluate(&request), Ok(Decision::Allowed));
+    }
+
+    #[test]
+    fn evaluate_variable_rule_no_resource() {
+        let json = r#"{
+            "schemaVersion": "2020-10-30",
+            "statements": [
+                {
+                    "effect": "deny",
+                    "identities": [
+                        "actor_a"
+                    ],
+                    "operations": [
+                        "connect"
+                    ]
+                },
+                {
+                    "effect": "allow",
+                    "identities": [
+                        "{{test}}"
+                    ],
+                    "operations": [
+                        "connect"
+                    ]
+                }
+            ]
+        }"#;
+
+        let policy = PolicyBuilder::from_json(json)
+            .with_default_decision(Decision::Denied)
+            .with_substituter(TestSubstituter)
+            .build()
+            .expect("Unable to build policy from json.");
+
+        let request = Request::new("actor_a".into(), "connect".into(), "".into()).unwrap();
+
+        assert_matches!(policy.evaluate(&request), Ok(Decision::Denied));
+
+        let request = Request::new("other_actor".into(), "connect".into(), "".into()).unwrap();
+
+        assert_matches!(policy.evaluate(&request), Ok(Decision::Allowed));
+    }
+
+    /// `TestSubstituter` replaces any value with the corresponding identity or resource
+    /// from the request, thus making the variable rule to always match the request.
+    struct TestSubstituter;
+
+    impl Substituter for TestSubstituter {
+        fn visit_identity(&self, _value: &str, context: &Request) -> Result<String> {
+            Ok(context.identity.clone())
+        }
+
+        fn visit_resource(&self, _value: &str, context: &Request) -> Result<String> {
+            Ok(context.resource.clone())
+        }
     }
 }

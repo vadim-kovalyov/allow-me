@@ -213,6 +213,10 @@ fn process_operations(statement: &Statement20201030) -> (Operations, Operations)
 fn process_resources(statement: &Statement20201030) -> (Resources, Resources) {
     let mut static_res = Resources::new();
     let mut variable_res = Resources::new();
+    if statement.resources.is_empty() {
+        static_res.insert("", statement.into());
+    }
+
     for resource in &statement.resources {
         // split resources into two static or variable rules:
         let map = if is_variable_rule(resource) {
