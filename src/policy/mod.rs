@@ -144,12 +144,8 @@ impl Identities {
         }
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-
-    pub fn insert(&mut self, operation: &str, resources: Operations) {
-        if !resources.is_empty() {
+    fn insert(&mut self, operation: &str, resources: Operations) {
+        if !resources.0.is_empty() {
             let entry = self.0.entry(operation.to_string());
             match entry {
                 Entry::Vacant(item) => {
@@ -175,12 +171,8 @@ impl Operations {
         }
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-
-    pub fn insert(&mut self, operation: &str, resources: Resources) {
-        if !resources.is_empty() {
+    fn insert(&mut self, operation: &str, resources: Resources) {
+        if !resources.0.is_empty() {
             let entry = self.0.entry(operation.to_string());
             match entry {
                 Entry::Vacant(item) => {
@@ -212,11 +204,7 @@ impl Resources {
         }
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-
-    pub fn insert(&mut self, resource: &str, effect: EffectOrd) {
+    fn insert(&mut self, resource: &str, effect: EffectOrd) {
         let entry = self.0.entry(resource.to_string());
         match entry {
             Entry::Vacant(item) => {
