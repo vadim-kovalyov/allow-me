@@ -1,2 +1,2 @@
 # allow-me-rs
-Simple json-based authorization policy engine.
+A json-based authorization policy engine.

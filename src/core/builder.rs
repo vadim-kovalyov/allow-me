@@ -1,10 +1,11 @@
+use std::error::Error as StdError;
+
 use lazy_static::lazy_static;
 use regex::Regex;
 use serde::Deserialize;
 
 use crate::{
-    policy::{Effect as CoreEffect, EffectOrd, Identities, Operations, Resources},
-    validator::Field,
+    core::{Identities, Operations, Resources},
     Decision, DefaultResourceMatcher, DefaultSubstituter, DefaultValidator, Error, Policy,
     PolicyValidator, ResourceMatcher, Result, Substituter,
 };
@@ -18,21 +19,38 @@ pub struct PolicyBuilder<V, M, S> {
     validator: V,
     matcher: M,
     substituter: S,
-    json: String,
+    source: Source,
     default_decision: Decision,
 }
 
 impl PolicyBuilder<DefaultValidator, DefaultResourceMatcher, DefaultSubstituter> {
-    /// Construct a `PolicyBuilder` from provided json policy definition and
+    /// Constructs a `PolicyBuilder` from provided json policy definition, with
     /// default configuration.
     ///
     /// Call to this method does not parse or validate the json, all heavy work
     /// is done in `build` method.
     pub fn from_json(
-        json: &str,
+        json: impl Into<String>,
     ) -> PolicyBuilder<DefaultValidator, DefaultResourceMatcher, DefaultSubstituter> {
         PolicyBuilder {
-            json: json.into(),
+            source: Source::Json(json.into()),
+            validator: DefaultValidator,
+            matcher: DefaultResourceMatcher,
+            substituter: DefaultSubstituter,
+            default_decision: Decision::Denied,
+        }
+    }
+
+    /// Constructs a `PolicyBuilder` from provided policy definition struct, with
+    /// default configuration.
+    ///
+    /// Call to this method does not validate the definition, all heavy work
+    /// is done in `build` method.
+    pub fn from_definition(
+        definition: PolicyDefinition,
+    ) -> PolicyBuilder<DefaultValidator, DefaultResourceMatcher, DefaultSubstituter> {
+        PolicyBuilder {
+            source: Source::Definition(definition),
             validator: DefaultValidator,
             matcher: DefaultResourceMatcher,
             substituter: DefaultSubstituter,
@@ -41,16 +59,17 @@ impl PolicyBuilder<DefaultValidator, DefaultResourceMatcher, DefaultSubstituter>
     }
 }
 
-impl<V, M, S> PolicyBuilder<V, M, S>
+impl<V, M, S, E> PolicyBuilder<V, M, S>
 where
-    V: PolicyValidator,
+    V: PolicyValidator<Error = E>,
     M: ResourceMatcher,
     S: Substituter,
+    E: StdError + Sync + Into<Box<dyn StdError>> + 'static,
 {
     /// Specifies the `PolicyValidator` to validate the policy definition.
     pub fn with_validator<V1>(self, validator: V1) -> PolicyBuilder<V1, M, S> {
         PolicyBuilder {
-            json: self.json,
+            source: self.source,
             validator,
             matcher: self.matcher,
             substituter: self.substituter,
@@ -61,7 +80,7 @@ where
     /// Specifies the `ResourceMatcher` to use with `Policy`.
     pub fn with_matcher<M1>(self, matcher: M1) -> PolicyBuilder<V, M1, S> {
         PolicyBuilder {
-            json: self.json,
+            source: self.source,
             validator: self.validator,
             matcher,
             substituter: self.substituter,
@@ -72,7 +91,7 @@ where
     /// Specifies the `Substituter` to use with `Policy`.
     pub fn with_substituter<S1>(self, substituter: S1) -> PolicyBuilder<V, M, S1> {
         PolicyBuilder {
-            json: self.json,
+            source: self.source,
             validator: self.validator,
             matcher: self.matcher,
             substituter,
@@ -88,18 +107,32 @@ where
     }
 
     /// Builds a `Policy` consuming the builder.
+    ///
+    /// This method does all the heavy lifting of deserializing json, validating and
+    /// constructing the policy rules tree.
+    ///
+    /// Any validation errors are collected and returned as `Error::ValidationSummary`.
     pub fn build(self) -> Result<Policy<M, S>> {
-        let mut definition: PolicyDefinition20201030 =
-            serde_json::from_str(&self.json).map_err(Error::Deserializing)?;
+        let PolicyBuilder {
+            validator,
+            matcher,
+            substituter,
+            source,
+            default_decision,
+        } = self;
+
+        let mut definition: PolicyDefinition = match source {
+            Source::Json(json) => PolicyDefinition::from_json(&json)?,
+            Source::Definition(definition) => definition,
+        };
 
         for (order, mut statement) in definition.statements.iter_mut().enumerate() {
             statement.order = order;
         }
 
-        let errors = self.validate(&definition);
-        if !errors.is_empty() {
-            return Err(Error::ValidationSummary(errors));
-        }
+        validator
+            .validate(&definition)
+            .map_err(|e| Error::Validation(e.into()))?;
 
         let mut static_rules = Identities::new();
         let mut variable_rules = Identities::new();
@@ -109,50 +142,17 @@ where
         }
 
         Ok(Policy {
-            default_decision: self.default_decision,
-            resource_matcher: self.matcher,
-            substituter: self.substituter,
+            default_decision,
+            resource_matcher: matcher,
+            substituter,
             static_rules: static_rules.0,
             variable_rules: variable_rules.0,
         })
     }
-
-    fn validate(&self, definition: &PolicyDefinition20201030) -> Vec<Error> {
-        definition
-            .statements
-            .iter()
-            .flat_map(|statement| {
-                let des_errors = self
-                    .validator
-                    .validate(Field::Description, &statement.description)
-                    .err();
-
-                let ids_errors = statement
-                    .identities
-                    .iter()
-                    .filter_map(|id| self.validator.validate(Field::Identities, id).err());
-
-                let ops_errors = statement
-                    .operations
-                    .iter()
-                    .filter_map(|op| self.validator.validate(Field::Operations, op).err());
-
-                let res_errors = statement
-                    .resources
-                    .iter()
-                    .filter_map(|res| self.validator.validate(Field::Resources, res).err());
-
-                ids_errors
-                    .chain(ops_errors)
-                    .chain(res_errors)
-                    .chain(des_errors)
-            })
-            .collect()
-    }
 }
 
 fn process_statement(
-    statement: &Statement20201030,
+    statement: &Statement,
     static_rules: &mut Identities,
     variable_rules: &mut Identities,
 ) {
@@ -162,7 +162,7 @@ fn process_statement(
     variable_rules.merge(variable_ids);
 }
 
-fn process_identities(statement: &Statement20201030) -> (Identities, Identities) {
+fn process_identities(statement: &Statement) -> (Identities, Identities) {
     let mut static_ids = Identities::new();
     let mut variable_ids = Identities::new();
     for identity in &statement.identities {
@@ -186,7 +186,7 @@ fn process_identities(statement: &Statement20201030) -> (Identities, Identities)
     (static_ids, variable_ids)
 }
 
-fn process_operations(statement: &Statement20201030) -> (Operations, Operations) {
+fn process_operations(statement: &Statement) -> (Operations, Operations) {
     let mut static_ops = Operations::new();
     let mut variable_ops = Operations::new();
     for operation in &statement.operations {
@@ -210,7 +210,7 @@ fn process_operations(statement: &Statement20201030) -> (Operations, Operations)
     (static_ops, variable_ops)
 }
 
-fn process_resources(statement: &Statement20201030) -> (Resources, Resources) {
+fn process_resources(statement: &Statement) -> (Resources, Resources) {
     let mut static_res = Resources::new();
     let mut variable_res = Resources::new();
     if statement.resources.is_empty() {
@@ -218,7 +218,7 @@ fn process_resources(statement: &Statement20201030) -> (Resources, Resources) {
     }
 
     for resource in &statement.resources {
-        // split resources into two static or variable rules:
+        // split resources into two buckets - static or variable rules:
         let map = if is_variable_rule(resource) {
             &mut variable_res
         } else {
@@ -239,54 +239,92 @@ fn is_variable_rule(value: &str) -> bool {
     VAR_PATTERN.is_match(value)
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct PolicyVersion {
-    schema_version: String,
+enum Source {
+    Json(String),
+    Definition(PolicyDefinition),
 }
 
-#[derive(Deserialize)]
+/// Represents a deserialized policy definition.
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct PolicyDefinition20201030 {
-    schema_version: String,
-    statements: Vec<Statement20201030>,
+pub struct PolicyDefinition {
+    pub(super) statements: Vec<Statement>,
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct Statement20201030 {
-    #[serde(default)]
-    order: usize,
-    #[serde(default)]
-    description: String,
-    effect: Effect20201030,
-    identities: Vec<String>,
-    operations: Vec<String>,
-    #[serde(default)]
-    resources: Vec<String>,
+impl PolicyDefinition {
+    pub fn from_json(json: &str) -> Result<Self> {
+        let definition: PolicyDefinition =
+            serde_json::from_str(json).map_err(Error::Deserializing)?;
+
+        Ok(definition)
+    }
+
+    pub fn statements(&self) -> &Vec<Statement> {
+        &self.statements
+    }
 }
 
-#[derive(Deserialize, Copy, Clone)]
+/// Represents a statement in a policy definition.
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-enum Effect20201030 {
+pub struct Statement {
+    #[serde(default)]
+    pub(super) order: usize,
+    #[serde(default)]
+    pub(super) description: String,
+    pub(super) effect: Effect,
+    pub(super) identities: Vec<String>,
+    pub(super) operations: Vec<String>,
+    #[serde(default)]
+    pub(super) resources: Vec<String>,
+}
+
+impl Statement {
+    pub(crate) fn order(&self) -> usize {
+        self.order
+    }
+
+    pub fn description(&self) -> &str {
+        &self.description
+    }
+
+    pub fn effect(&self) -> Effect {
+        self.effect
+    }
+
+    pub fn identities(&self) -> &Vec<String> {
+        &self.identities
+    }
+
+    pub fn operations(&self) -> &Vec<String> {
+        &self.operations
+    }
+
+    pub fn resources(&self) -> &Vec<String> {
+        &self.resources
+    }
+}
+
+/// Represents an effect on a statement.
+#[derive(Debug, Deserialize, Copy, Clone, PartialOrd, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum Effect {
     Allow,
     Deny,
 }
 
-impl Into<EffectOrd> for &Statement20201030 {
-    fn into(self) -> EffectOrd {
-        match self.effect {
-            Effect20201030::Allow => EffectOrd::new(CoreEffect::Allow, self.order),
-            Effect20201030::Deny => EffectOrd::new(CoreEffect::Deny, self.order),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::policy::tests::build_policy;
+    use std::result::Result as StdResult;
+
     use matches::assert_matches;
+
+    use crate::{
+        core::{tests::build_policy, Effect, EffectOrd},
+        validator::ValidatorError,
+    };
+
+    use super::*;
 
     #[test]
     fn test_basic_definition() {
@@ -296,7 +334,7 @@ mod tests {
                 {
                     "effect": "allow",
                     "identities": [
-                        "contoso.azure-devices.net/monitor_a"
+                        "actor_a"
                     ],
                     "operations": [
                         "read"
@@ -308,7 +346,7 @@ mod tests {
                 {
                     "effect": "allow",
                     "identities": [
-                        "actor_a"
+                        "actor_b"
                     ],
                     "operations": [
                         "write"
@@ -535,7 +573,7 @@ mod tests {
         assert_eq!(
             EffectOrd {
                 order: 0,
-                effect: CoreEffect::Allow
+                effect: Effect::Allow
             },
             policy.static_rules["actor_a"].0["write"].0["events/telemetry"]
         );
@@ -544,7 +582,7 @@ mod tests {
         assert_eq!(
             EffectOrd {
                 order: 2,
-                effect: CoreEffect::Allow
+                effect: Effect::Allow
             },
             policy.variable_rules["actor_a"].0["read"].0["{{variable}}/#"]
         );
@@ -582,28 +620,28 @@ mod tests {
         assert_eq!(
             policy.static_rules["actor_a"].0["write"].0["events/telemetry"],
             EffectOrd {
-                effect: CoreEffect::Allow,
+                effect: Effect::Allow,
                 order: 0
             }
         );
         assert_eq!(
             policy.static_rules["actor_a"].0["read"].0["events/telemetry"],
             EffectOrd {
-                effect: CoreEffect::Allow,
+                effect: Effect::Allow,
                 order: 0
             }
         );
         assert_eq!(
             policy.static_rules["actor_b"].0["write"].0["events/telemetry"],
             EffectOrd {
-                effect: CoreEffect::Allow,
+                effect: Effect::Allow,
                 order: 0
             }
         );
         assert_eq!(
             policy.static_rules["actor_b"].0["read"].0["events/telemetry"],
             EffectOrd {
-                effect: CoreEffect::Allow,
+                effect: Effect::Allow,
                 order: 0
             }
         );
@@ -613,42 +651,42 @@ mod tests {
         assert_eq!(
             policy.variable_rules["actor_a"].0["write"].0["devices/{{variable}}/#"],
             EffectOrd {
-                effect: CoreEffect::Allow,
+                effect: Effect::Allow,
                 order: 0
             }
         );
         assert_eq!(
             policy.variable_rules["actor_a"].0["read"].0["devices/{{variable}}/#"],
             EffectOrd {
-                effect: CoreEffect::Allow,
+                effect: Effect::Allow,
                 order: 0
             }
         );
         assert_eq!(
             policy.variable_rules["actor_b"].0["write"].0["devices/{{variable}}/#"],
             EffectOrd {
-                effect: CoreEffect::Allow,
+                effect: Effect::Allow,
                 order: 0
             }
         );
         assert_eq!(
             policy.variable_rules["actor_b"].0["read"].0["devices/{{variable}}/#"],
             EffectOrd {
-                effect: CoreEffect::Allow,
+                effect: Effect::Allow,
                 order: 0
             }
         );
         assert_eq!(
             policy.variable_rules["{{var_actor}}"].0["write"].0["devices/{{variable}}/#"],
             EffectOrd {
-                effect: CoreEffect::Allow,
+                effect: Effect::Allow,
                 order: 0
             }
         );
         assert_eq!(
             policy.variable_rules["{{var_actor}}"].0["read"].0["devices/{{variable}}/#"],
             EffectOrd {
-                effect: CoreEffect::Allow,
+                effect: Effect::Allow,
                 order: 0
             }
         );
@@ -674,7 +712,7 @@ mod tests {
                 {
                     "effect": "allow",
                     "identities": [
-                        "contoso.azure-devices.net/monitor"
+                        "monitor"
                     ],
                     "operations": [
                         "read"
@@ -691,18 +729,17 @@ mod tests {
             .with_default_decision(Decision::Denied)
             .build();
 
-        assert_matches!(result, Err(Error::ValidationSummary(errors)) if errors.len() == 8 );
+        assert_matches!(result, Err(Error::Validation(_)));
     }
 
     #[derive(Debug)]
     struct FailAllValidator;
 
     impl PolicyValidator for FailAllValidator {
-        fn validate(&self, field: Field, value: &str) -> Result<()> {
-            Err(Error::Validation(format!(
-                "Unable to parse value {:?} for field {:?}",
-                value, field
-            )))
+        type Error = ValidatorError;
+
+        fn validate(&self, _definition: &PolicyDefinition) -> StdResult<(), Self::Error> {
+            Err(ValidatorError::ValidationSummary(vec!["error".to_string()]))
         }
     }
 }

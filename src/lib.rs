@@ -8,19 +8,18 @@
     clippy::use_self,
     clippy::match_same_arms,
     clippy::must_use_candidate,
-    clippy::missing_errors_doc,
-
-    dead_code //TODO: remove this
+    clippy::missing_errors_doc
 )]
+
+mod core;
 mod errors;
 mod matcher;
-mod policy;
 mod substituter;
 mod validator;
 
-pub use errors::{Error, Result};
-pub use matcher::{DefaultResourceMatcher, ResourceMatcher};
-pub use policy::PolicyBuilder;
-pub use policy::{Decision, Policy, Request};
-pub use substituter::{DefaultSubstituter, Substituter};
-pub use validator::{DefaultValidator, PolicyValidator};
+pub use crate::core::{Decision, Effect, Policy, Request};
+pub use crate::core::{PolicyBuilder, PolicyDefinition, Statement};
+pub use crate::errors::{Error, Result};
+pub use crate::matcher::{DefaultResourceMatcher, ResourceMatcher};
+pub use crate::substituter::{DefaultSubstituter, Substituter};
+pub use crate::validator::{DefaultValidator, PolicyValidator};

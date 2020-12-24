@@ -1,8 +1,8 @@
 [package]
 authors = ["Vadim Kovalyov <vadim.kovalyov@gmail.com>"]
-description = "Simple json-based authorization policy engine."
+description = "A json-based authorization policy engine."
 edition = "2018"
-name = "allow-me-rs"
+name = "allow-me"
 version = "0.1.0"
 
 [dependencies]
