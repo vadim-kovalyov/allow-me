@@ -8,13 +8,13 @@
 
 mod core;
 mod errors;
-mod matcher;
+pub mod matcher;
 mod substituter;
 mod validator;
 
 pub use crate::core::{Decision, Effect, Policy, Request};
 pub use crate::core::{PolicyBuilder, PolicyDefinition, Statement};
 pub use crate::errors::{Error, Result};
-pub use crate::matcher::{DefaultResourceMatcher, ResourceMatcher};
+pub use crate::matcher::ResourceMatcher;
 pub use crate::substituter::{DefaultSubstituter, Substituter};
 pub use crate::validator::{DefaultValidator, PolicyValidator};

@@ -1,7 +1,4 @@
-use allow_me::{
-    Decision, DefaultResourceMatcher, DefaultSubstituter, DefaultValidator, PolicyBuilder, Request,
-    Result,
-};
+use allow_me::{Decision, PolicyBuilder, Request, Result};
 
 fn main() -> Result<()> {
     let json = r#"{
@@ -23,9 +20,6 @@ fn main() -> Result<()> {
     }"#;
 
     let policy = PolicyBuilder::from_json(json)
-        .with_validator(DefaultValidator)
-        .with_matcher(DefaultResourceMatcher)
-        .with_substituter(DefaultSubstituter)
         .with_default_decision(Decision::Denied)
         .build()?;
 

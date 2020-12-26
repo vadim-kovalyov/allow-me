@@ -12,12 +12,25 @@ pub trait ResourceMatcher {
 
 /// Default matcher uses equality check for resource matching.
 #[derive(Debug)]
-pub struct DefaultResourceMatcher;
+pub struct Default;
 
-impl ResourceMatcher for DefaultResourceMatcher {
+impl ResourceMatcher for Default {
     type Context = ();
 
     fn do_match(&self, _context: &Request<Self::Context>, input: &str, policy: &str) -> bool {
         input == policy
+    }
+}
+
+/// Resource matcher that uses "star-with" check for resource matching.
+/// Input matches the policy if input value starts with policy value.
+#[derive(Debug)]
+pub struct StartsWith;
+
+impl ResourceMatcher for StartsWith {
+    type Context = ();
+
+    fn do_match(&self, _context: &Request<Self::Context>, input: &str, policy: &str) -> bool {
+        input.starts_with(policy)
     }
 }

@@ -347,12 +347,14 @@ impl From<&Statement> for EffectOrd {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use crate::{DefaultResourceMatcher, DefaultSubstituter};
+
+    use crate::{matcher::Default, DefaultSubstituter};
+
     use matches::assert_matches;
 
     /// Helper method to build a policy.
     /// Used in both policy and builder tests.
-    pub(crate) fn build_policy(json: &str) -> Policy<DefaultResourceMatcher, DefaultSubstituter> {
+    pub(crate) fn build_policy(json: &str) -> Policy<Default, DefaultSubstituter> {
         PolicyBuilder::from_json(json)
             .with_default_decision(Decision::Denied)
             .build()
@@ -740,7 +742,7 @@ pub(crate) mod tests {
         let policy = PolicyBuilder::from_json(json)
             .with_default_decision(Decision::Denied)
             .with_substituter(TestIdentitySubstituter)
-            .with_matcher(DefaultResourceMatcher)
+            .with_matcher(Default)
             .build()
             .expect("Unable to build policy from json.");
 
@@ -789,7 +791,7 @@ pub(crate) mod tests {
         let policy = PolicyBuilder::from_json(json)
             .with_default_decision(Decision::Denied)
             .with_substituter(TestIdentitySubstituter)
-            .with_matcher(DefaultResourceMatcher)
+            .with_matcher(Default)
             .build()
             .expect("Unable to build policy from json.");
 

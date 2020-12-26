@@ -6,8 +6,8 @@ use serde::Deserialize;
 
 use crate::{
     core::{Identities, Operations, Resources},
-    Decision, DefaultResourceMatcher, DefaultSubstituter, DefaultValidator, Error, Policy,
-    PolicyValidator, ResourceMatcher, Result, Substituter,
+    matcher, Decision, DefaultSubstituter, DefaultValidator, Error, Policy, PolicyValidator,
+    ResourceMatcher, Result, Substituter,
 };
 
 /// A policy builder, responsible for parsing policy definition
@@ -23,7 +23,7 @@ pub struct PolicyBuilder<V, M, S> {
     default_decision: Decision,
 }
 
-impl PolicyBuilder<DefaultValidator, DefaultResourceMatcher, DefaultSubstituter> {
+impl PolicyBuilder<DefaultValidator, matcher::Default, DefaultSubstituter> {
     /// Constructs a `PolicyBuilder` from provided json policy definition, with
     /// default configuration.
     ///
@@ -31,11 +31,11 @@ impl PolicyBuilder<DefaultValidator, DefaultResourceMatcher, DefaultSubstituter>
     /// is done in `build` method.
     pub fn from_json(
         json: impl Into<String>,
-    ) -> PolicyBuilder<DefaultValidator, DefaultResourceMatcher, DefaultSubstituter> {
+    ) -> PolicyBuilder<DefaultValidator, matcher::Default, DefaultSubstituter> {
         PolicyBuilder {
             source: Source::Json(json.into()),
             validator: DefaultValidator,
-            matcher: DefaultResourceMatcher,
+            matcher: matcher::Default,
             substituter: DefaultSubstituter,
             default_decision: Decision::Denied,
         }
@@ -48,11 +48,11 @@ impl PolicyBuilder<DefaultValidator, DefaultResourceMatcher, DefaultSubstituter>
     /// is done in `build` method.
     pub fn from_definition(
         definition: PolicyDefinition,
-    ) -> PolicyBuilder<DefaultValidator, DefaultResourceMatcher, DefaultSubstituter> {
+    ) -> PolicyBuilder<DefaultValidator, matcher::Default, DefaultSubstituter> {
         PolicyBuilder {
             source: Source::Definition(definition),
             validator: DefaultValidator,
-            matcher: DefaultResourceMatcher,
+            matcher: matcher::Default,
             substituter: DefaultSubstituter,
             default_decision: Decision::Denied,
         }
