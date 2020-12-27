@@ -376,7 +376,6 @@ pub(crate) mod tests {
     #[test]
     fn evaluate_static_rules() {
         let json = r#"{
-            "schemaVersion": "2020-10-30",
             "statements": [
                 {
                     "effect": "deny",
@@ -419,7 +418,6 @@ pub(crate) mod tests {
     #[test]
     fn evaluate_undefined_rules_expected_default_action() {
         let json = r#"{
-            "schemaVersion": "2020-10-30",
             "statements": [
                 {
                     "effect": "allow",
@@ -461,7 +459,6 @@ pub(crate) mod tests {
     #[test]
     fn evaluate_static_variable_rule_conflict_first_rule_wins() {
         let json = r#"{
-            "schemaVersion": "2020-10-30",
             "statements": [
                 {
                     "effect": "allow",
@@ -534,7 +531,6 @@ pub(crate) mod tests {
     #[test]
     fn evaluate_rule_no_resource() {
         let json = r#"{
-            "schemaVersion": "2020-10-30",
             "statements": [
                 {
                     "effect": "allow",
@@ -558,7 +554,6 @@ pub(crate) mod tests {
     #[test]
     fn evaluate_variable_rule_no_resource() {
         let json = r#"{
-            "schemaVersion": "2020-10-30",
             "statements": [
                 {
                     "effect": "deny",
@@ -599,7 +594,6 @@ pub(crate) mod tests {
     #[test]
     fn evaluate_definition_no_statements() {
         let json = r#"{
-            "schemaVersion": "2020-10-30",
             "statements": [ ]
         }"#;
 
@@ -622,7 +616,6 @@ pub(crate) mod tests {
     #[test]
     fn rule_ordering_should_work_for_custom_matchers() {
         let json = r###"{
-            "schemaVersion": "2020-10-30",
             "statements": [
                 {
                     "effect": "allow",
@@ -667,7 +660,6 @@ pub(crate) mod tests {
     #[test]
     fn rule_ordering_should_work_for_custom_matchers_variable_rules() {
         let json = r###"{
-            "schemaVersion": "2020-10-30",
             "statements": [
                 {
                     "effect": "allow",
@@ -722,7 +714,6 @@ pub(crate) mod tests {
     #[test]
     fn all_identity_variable_rules_must_be_evaluated_resources_do_not_match() {
         let json = r###"{
-            "schemaVersion": "2020-10-30",
             "statements": [
                 {
                     "effect": "deny",
@@ -771,7 +762,6 @@ pub(crate) mod tests {
     #[test]
     fn all_identity_variable_rules_must_be_evaluated_operations_do_not_match() {
         let json = r###"{
-            "schemaVersion": "2020-10-30",
             "statements": [
                 {
                     "effect": "deny",

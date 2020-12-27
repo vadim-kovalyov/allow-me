@@ -2,7 +2,6 @@ use allow_me::{Decision, PolicyBuilder, Request, Result};
 
 fn main() -> Result<()> {
     let json = r#"{
-        "schemaVersion": "2020-10-30",
         "statements": [
             {
                 "effect": "allow",
@@ -25,8 +24,12 @@ fn main() -> Result<()> {
 
     let request = Request::new("actor_a", "write", "resource_1")?;
 
-    let result = policy.evaluate(&request)?;
-    println!("Result of policy evaluation: {:?}", result);
+    match policy.evaluate(&request)? {
+        Decision::Allowed => println!("Allowed"),
+        Decision::Denied => {
+            panic!("Denied!")
+        }
+    };
 
     Ok(())
 }

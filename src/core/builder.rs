@@ -329,7 +329,6 @@ mod tests {
     #[test]
     fn test_basic_definition() {
         let json = r#"{
-            "schemaVersion": "2020-10-30",
             "statements": [
                 {
                     "effect": "allow",
@@ -380,7 +379,6 @@ mod tests {
     #[test]
     fn identity_merge_rules() {
         let json = r#"{
-            "schemaVersion": "2020-10-30",
             "statements": [
                 {
                     "effect": "allow",
@@ -447,7 +445,6 @@ mod tests {
     #[test]
     fn operation_merge_rules() {
         let json = r#"{
-            "schemaVersion": "2020-10-30",
             "statements": [
                 {
                     "effect": "allow",
@@ -514,7 +511,6 @@ mod tests {
     #[test]
     fn resource_merge_rules_higher_priority_statement_wins() {
         let json = r#"{
-            "schemaVersion": "2020-10-30",
             "statements": [
                 {
                     "effect": "allow",
@@ -592,7 +588,6 @@ mod tests {
     #[allow(clippy::too_many_lines)]
     fn grouping_rules_with_variables_test() {
         let json = r#"{
-            "schemaVersion": "2020-10-30",
             "statements": [
                 {
                     "effect": "allow",
@@ -695,7 +690,6 @@ mod tests {
     #[test]
     fn policy_validation_test() {
         let json = r#"{
-            "schemaVersion": "2020-10-30",
             "statements": [
                 {
                     "effect": "allow",
