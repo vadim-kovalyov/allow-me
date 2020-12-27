@@ -287,6 +287,18 @@ impl<RC> Request<RC> {
         })
     }
 
+    pub fn identity(&self) -> &str {
+        &self.identity
+    }
+
+    pub fn operation(&self) -> &str {
+        &self.operation
+    }
+
+    pub fn resource(&self) -> &str {
+        &self.resource
+    }
+
     pub fn context(&self) -> Option<&RC> {
         self.context.as_ref()
     }
@@ -350,7 +362,7 @@ pub(crate) mod tests {
 
     use crate::{matcher::Default, DefaultSubstituter};
 
-    use matches::assert_matches;
+    use assert_matches::assert_matches;
 
     /// Helper method to build a policy.
     /// Used in both policy and builder tests.
@@ -810,6 +822,14 @@ pub(crate) mod tests {
 
         fn visit_identity(&self, _value: &str, context: &Request<Self::Context>) -> Result<String> {
             Ok(context.identity.clone())
+        }
+
+        fn visit_operation(
+            &self,
+            _value: &str,
+            context: &Request<Self::Context>,
+        ) -> Result<String> {
+            Ok(context.operation.clone())
         }
 
         fn visit_resource(&self, value: &str, _context: &Request<Self::Context>) -> Result<String> {

@@ -317,7 +317,7 @@ pub enum Effect {
 mod tests {
     use std::result::Result as StdResult;
 
-    use matches::assert_matches;
+    use assert_matches::assert_matches;
 
     use crate::{
         core::{tests::build_policy, Effect, EffectOrd},
