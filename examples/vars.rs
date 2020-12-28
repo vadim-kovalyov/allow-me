@@ -1,4 +1,4 @@
-use allow_me::{Decision, PolicyBuilder, Request, Result};
+use allow_me::{matcher, Decision, PolicyBuilder, Request, Result};
 
 fn main() -> Result<()> {
     let json = r#"{
@@ -6,23 +6,28 @@ fn main() -> Result<()> {
             {
                 "effect": "allow",
                 "identities": [
-                    "actor_a"
+                    "{{any}}"
                 ],
                 "operations": [
+                    "read",
                     "write"
                 ],
                 "resources": [
-                    "resource_1"
+                    "/home/{{identity}}/"
                 ]
             }
         ]
     }"#;
 
     // Construct the policy.
-    let policy = PolicyBuilder::from_json(json).build()?;
+    let policy = PolicyBuilder::from_json(json)
+        // use "starts with" matching for resources.
+        .with_matcher(matcher::StartsWith)
+        .with_default_decision(Decision::Denied)
+        .build()?;
 
     // Prepare request (e.g. from user input).
-    let request = Request::new("actor_a", "write", "resource_1")?;
+    let request = Request::new("johndoe", "write", "/home/johndoe/my.resource")?;
 
     // Evaluate the request.
     match policy.evaluate(&request)? {

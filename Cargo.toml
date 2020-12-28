@@ -2,10 +2,10 @@
 name = "allow-me"
 version = "0.1.0"
 authors = ["Vadim Kovalyov <vadim.kovalyov@gmail.com>"]
-description = "A authorization library with json-based policy definition."
+description = "An authorization library with json-based policy definition."
 documentation = "https://docs.rs/allow-me"
 repository = "https://github.com/vadim-kovalyov/allow-me.git"
-categories = ["authentication", "configuration"]
+categories = ["authorization", "configuration"]
 keywords = ["authorization", "policy", "acl", "rbac"]
 license = "MIT"
 exclude = [".gitignore"]

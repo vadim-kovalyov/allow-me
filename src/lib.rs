@@ -16,5 +16,5 @@ pub use crate::core::{Decision, Effect, Policy, Request};
 pub use crate::core::{PolicyBuilder, PolicyDefinition, Statement};
 pub use crate::errors::{Error, Result};
 pub use crate::matcher::ResourceMatcher;
-pub use crate::substituter::{DefaultSubstituter, Substituter};
+pub use crate::substituter::{DefaultSubstituter, Substituter, VariableIter};
 pub use crate::validator::{DefaultValidator, PolicyValidator};

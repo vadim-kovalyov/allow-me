@@ -110,7 +110,7 @@ fn replace(value: &str, variable: &str, substitution: &str) -> String {
 /// of variable substrings like `{{var_name}}` in the
 /// provided string value.
 #[derive(Debug)]
-pub(super) struct VariableIter<'a> {
+pub struct VariableIter<'a> {
     value: &'a str,
     index: usize,
 }
