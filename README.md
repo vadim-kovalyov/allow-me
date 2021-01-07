@@ -215,3 +215,5 @@ impl Substituter for RoleSubstituter {
 cargo run --example customizations
 ```
 
+# Roadmap
+- [] Regex support

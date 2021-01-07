@@ -8,8 +8,14 @@ repository = "https://github.com/vadim-kovalyov/allow-me.git"
 categories = ["authorization", "configuration"]
 keywords = ["authorization", "policy", "acl", "rbac"]
 license = "MIT"
-exclude = [".gitignore"]
 edition = "2018"
+
+include = [
+  "Cargo.toml",
+  "LICENSE",
+  "README.md",
+  "src/**/*",
+]
 
 [dependencies]
 lazy_static = "1"
