@@ -8,12 +8,12 @@ An authorization library with json-based policy definition.
 
 Define your authorization rules in a simple `Identity` (I), `Operation` (O), `Resource` (R) model. Evaluate requests against your policy rules.
 
-# Installation
+# Getting Started
 ```toml
 [dependencies]
 allow-me = "0.1"
 ```
-# Examples
+# Example Usage
 ## Json definition
 A simple example for a policy with one statement and a request evaluated against that policy.
 ```rust

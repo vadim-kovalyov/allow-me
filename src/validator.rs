@@ -2,13 +2,13 @@ use thiserror::Error;
 
 use crate::{PolicyDefinition, Statement};
 
-/// Trait to extend `PolicyBuilder` validation for policy definition.
+/// Trait to extend [`PolicyBuilder`](`crate::PolicyBuilder`) validation for policy definition.
 pub trait PolicyValidator {
     /// The type of the validation error.
     type Error;
 
-    /// This method is being called by `PolicyBuilder` for policy definition
-    /// while `Policy` is being constructed.
+    /// This method is being called by [`PolicyBuilder`](`crate::PolicyBuilder`) for policy definition
+    /// while [`Policy`](`crate::Policy`) is being constructed.
     ///
     /// If a policy definitions fails the validation, the error is returned.
     fn validate(&self, definition: &PolicyDefinition) -> Result<(), Self::Error>;

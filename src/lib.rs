@@ -1,3 +1,53 @@
+//! # An authorization library with json-based policy definition.
+//! Define your authorization rules in a simple `Identity` (I), `Operation` (O),
+//! `Resource` (R) model. Evaluate requests against your policy rules.
+//!
+//! Supports the following customizations:
+//! * variable rules and custom variables,
+//! * custom resource matching,
+//! * custom validation,
+//! * default decision if no rules match.
+//!
+//! ## Examples
+//!
+//! ```rust
+//! use allow_me::{Decision, PolicyBuilder, Request};
+//!
+//! let json = r#"{
+//!     "statements": [
+//!         {
+//!             "effect": "allow",
+//!             "identities": [
+//!                 "actor_a"
+//!             ],
+//!             "operations": [
+//!                 "write"
+//!             ],
+//!             "resources": [
+//!                 "resource_1"
+//!             ]
+//!         }
+//!     ]
+//! }"#;
+//!
+//! // Construct the policy.
+//! let policy = PolicyBuilder::from_json(json).build().unwrap();
+//!
+//! // Prepare request (e.g. from user input).
+//! let request = Request::new("actor_a", "write", "resource_1").unwrap();
+//!
+//! // Evaluate the request.
+//! match policy.evaluate(&request).unwrap() {
+//!     Decision::Allowed => println!("Allowed"),
+//!     Decision::Denied => {
+//!         panic!("Denied!")
+//!     }
+//! };
+//! ```
+//!
+//! See more in Examples folder.
+//!
+
 #![deny(rust_2018_idioms, warnings)]
 #![deny(clippy::all, clippy::pedantic)]
 #![allow(

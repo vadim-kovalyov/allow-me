@@ -1,25 +1,25 @@
 use crate::{Error, Request};
 
-/// Trait to extend `Policy` variable rules resolution.
+/// Trait to extend [`Policy`](`crate::Policy`) variable rules resolution.
 pub trait Substituter {
     /// The type of the context associated with the request.
     type Context;
 
-    /// This method is called by `Policy` on every `Request` for every variable identity rule.
+    /// This method is called by [`Policy`](`crate::Policy`) on every [`Request`] for every variable identity rule.
     fn visit_identity(
         &self,
         value: &str,
         context: &Request<Self::Context>,
     ) -> Result<String, Error>;
 
-    /// This method is called by `Policy` on every `Request` for every variable operation rule.
+    /// This method is called by [`Policy`](`crate::Policy`) on every [`Request`] for every variable operation rule.
     fn visit_operation(
         &self,
         value: &str,
         context: &Request<Self::Context>,
     ) -> Result<String, Error>;
 
-    /// This method is called by `Policy` on every `Request` for every variable resource rule.
+    /// This method is called by [`Policy`](`crate::Policy`) on every [`Request`] for every variable resource rule.
     fn visit_resource(
         &self,
         value: &str,
@@ -31,7 +31,7 @@ pub(crate) const ANY_VAR: &str = "{{any}}";
 pub(crate) const IDENTITY_VAR: &str = "{{identity}}";
 pub(crate) const OPERATION_VAR: &str = "{{operation}}";
 
-/// Default implementation of `Substituter`. It supports several useful variables:
+/// Default implementation of [`Substituter`]. It supports several useful variables:
 /// * `any` - replaced by input value from the Request.
 /// * `identity` - replaced by identity value from the Request.
 /// * `operation` - replaced by operation value from the Request.
@@ -108,7 +108,8 @@ fn replace(value: &str, variable: &str, substitution: &str) -> String {
 
 /// A simple iterator that returns all occurrences
 /// of variable substrings like `{{var_name}}` in the
-/// provided string value.
+/// provided string value. Can be used in your custom
+/// [`Substituter`] implementation.
 #[derive(Debug)]
 pub struct VariableIter<'a> {
     value: &'a str,

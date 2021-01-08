@@ -10,7 +10,7 @@ mod builder;
 pub use builder::{Effect, PolicyBuilder, PolicyDefinition, Statement};
 
 /// Policy engine. Represents a read-only set of rules and can
-/// evaluate `Request` based on those rules.
+/// evaluate [`Request`] based on those rules.
 ///
 /// Policy engine consists of two sets:
 /// - static rules
@@ -31,9 +31,9 @@ where
     R: ResourceMatcher<Context = RC>,
     S: Substituter<Context = RC>,
 {
-    /// Evaluates the provided `&Request` and produces the `Decision`.
+    /// Evaluates the provided [`Request`] and produces the [`Decision`].
     ///
-    /// If no rules match the `&Request` - the default `Decision` is returned.
+    /// If no rules match the Request - [the default `Decision`](`PolicyBuilder::with_default_decision`) is returned.
     pub fn evaluate(&self, request: &Request<RC>) -> Result<Decision> {
         match self.eval_static_rules(request) {
             // static rules undefined. Need to check variable rules.
@@ -233,7 +233,7 @@ impl From<BTreeMap<String, EffectOrd>> for Resources {
     }
 }
 
-/// Represents a request that needs to be `evaluate`d by `Policy` engine.
+/// Represents a request that needs to be evaluated by [`Policy`] engine.
 #[derive(Debug)]
 pub struct Request<RC> {
     identity: String,
@@ -245,7 +245,9 @@ pub struct Request<RC> {
 }
 
 impl<RC> Request<RC> {
-    /// Creates a new `Request`. Returns an error if either identity or operation is an empty string.
+    /// Creates a new [`Request`].
+    /// # Errors
+    /// Returns an error if either identity or operation is an empty string.
     pub fn new(
         identity: impl Into<String>,
         operation: impl Into<String>,
@@ -254,6 +256,9 @@ impl<RC> Request<RC> {
         Self::create(identity, operation, resource, None)
     }
 
+    /// Creates a new [`Request`] with provided context data.
+    /// # Errors
+    /// Returns an error if either identity or operation is an empty string.
     pub fn with_context(
         identity: impl Into<String>,
         operation: impl Into<String>,

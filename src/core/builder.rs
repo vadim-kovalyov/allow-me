@@ -11,10 +11,10 @@ use crate::{
 };
 
 /// A policy builder, responsible for parsing policy definition
-/// and constructing `Policy` struct.
+/// and constructing [`Policy`] struct.
 ///
 /// It handles policy definition versioning and allows fine-grained
-/// configuration of `Policy` components.
+/// configuration of [`Policy`] components.
 pub struct PolicyBuilder<V, M, S> {
     validator: V,
     matcher: M,
@@ -24,7 +24,7 @@ pub struct PolicyBuilder<V, M, S> {
 }
 
 impl PolicyBuilder<DefaultValidator, matcher::Default, DefaultSubstituter> {
-    /// Constructs a `PolicyBuilder` from provided json policy definition, with
+    /// Constructs a [`PolicyBuilder`] from provided json policy definition, with
     /// default configuration.
     ///
     /// Call to this method does not parse or validate the json, all heavy work
@@ -41,7 +41,7 @@ impl PolicyBuilder<DefaultValidator, matcher::Default, DefaultSubstituter> {
         }
     }
 
-    /// Constructs a `PolicyBuilder` from provided policy definition struct, with
+    /// Constructs a [`PolicyBuilder`] from provided policy definition struct, with
     /// default configuration.
     ///
     /// Call to this method does not validate the definition, all heavy work
@@ -66,7 +66,7 @@ where
     S: Substituter,
     E: StdError + Sync + Into<Box<dyn StdError>> + 'static,
 {
-    /// Specifies the `PolicyValidator` to validate the policy definition.
+    /// Specifies the [`PolicyValidator`] to validate the policy definition.
     pub fn with_validator<V1>(self, validator: V1) -> PolicyBuilder<V1, M, S> {
         PolicyBuilder {
             source: self.source,
@@ -77,7 +77,7 @@ where
         }
     }
 
-    /// Specifies the `ResourceMatcher` to use with `Policy`.
+    /// Specifies the [`ResourceMatcher`] to use with Policy.
     pub fn with_matcher<M1>(self, matcher: M1) -> PolicyBuilder<V, M1, S> {
         PolicyBuilder {
             source: self.source,
@@ -88,7 +88,7 @@ where
         }
     }
 
-    /// Specifies the `Substituter` to use with `Policy`.
+    /// Specifies the [`Substituter`] to use with Policy.
     pub fn with_substituter<S1>(self, substituter: S1) -> PolicyBuilder<V, M, S1> {
         PolicyBuilder {
             source: self.source,
@@ -99,19 +99,20 @@ where
         }
     }
 
-    /// Specifies the default decision that `Policy` will return if
+    /// Specifies the default decision that [`Policy`] will return if
     /// no rules match the request.
     pub fn with_default_decision(mut self, decision: Decision) -> Self {
         self.default_decision = decision;
         self
     }
 
-    /// Builds a `Policy` consuming the builder.
+    /// Builds a [`Policy`] consuming the builder.
     ///
     /// This method does all the heavy lifting of deserializing json, validating and
     /// constructing the policy rules tree.
     ///
-    /// Any validation errors are collected and returned as `Error::ValidationSummary`.
+    /// # Errors
+    /// Returns  [`PolicyValidator::Error`] if any.
     pub fn build(self) -> Result<Policy<M, S>> {
         let PolicyBuilder {
             validator,
