@@ -1,4 +1,7 @@
 # Allow-me
+[![Crates.io](https://img.shields.io/crates/v/allow-me.svg)](https://crates.io/crates/allow-me)
+[![Docs.rs](https://docs.rs/allow-me/badge.svg)](https://docs.rs/allow-me)
+[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](https://raw.githubusercontent.com/vadim-kovalyov/allow-me/master/LICENSE)
 ![CI](https://github.com/vadim-kovalyov/allow-me/workflows/CI/badge.svg)   
 
 An authorization library with json-based policy definition.
@@ -217,3 +220,7 @@ cargo run --example customizations
 
 # Roadmap
 - [ ] Regex support
+
+# Contribution
+
+All contributions and comments are welcome! Don't be afraid to open an issue or PR whenever you find a bug or have an idea to improve this crate.
