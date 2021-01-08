@@ -216,4 +216,4 @@ cargo run --example customizations
 ```
 
 # Roadmap
-- [] Regex support
+- [ ] Regex support
