@@ -1,6 +1,6 @@
 [package]
 name = "allow-me"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Vadim Kovalyov <vadim.kovalyov@gmail.com>"]
 description = "An authorization library with json-based policy definition."
 documentation = "https://docs.rs/allow-me"

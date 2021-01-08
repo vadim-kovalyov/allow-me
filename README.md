@@ -219,7 +219,9 @@ cargo run --example customizations
 ```
 
 # Roadmap
+- [ ] Fluent API for PolicyBuilder
 - [ ] Regex support
+- [ ] Benches
 
 # Contribution
 
