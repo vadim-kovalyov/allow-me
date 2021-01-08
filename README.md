@@ -10,7 +10,7 @@ Define your authorization rules in a simple `Identity` (I), `Operation` (O), `Re
 [dependencies]
 allow-me = "0.1"
 ```
-# Usage
+# Examples
 ## Json definition
 A simple example for a policy with one statement and a request evaluated against that policy.
 ```rust
@@ -45,7 +45,7 @@ match policy.evaluate(&request)? {
     }
 };
 ```
-### Example
+### Try it
 ```
 cargo run --example json
 ```
@@ -90,7 +90,7 @@ match policy.evaluate(&request)? {
 };
 
 ```
-### Example
+### Try it
 ```
 cargo run --example vars
 ```
@@ -149,7 +149,7 @@ let request = Request::new("actor_a", "write", "some_other_resource")?;
 // Everything else denies.
 assert_matches!(policy.evaluate(&request), Ok(Decision::Denied));
 ```
-### Example
+### Try it
 ```
 cargo run --example order
 ```
@@ -210,7 +210,7 @@ impl Substituter for RoleSubstituter {
     ...
 }
 ```
-### Example
+### Try it
 ```
 cargo run --example customizations
 ```
